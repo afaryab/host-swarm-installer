@@ -1,3 +1,69 @@
+ensure_swarm() {
+  local state role ip
+  state=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || echo "inactive")
+  role=$(docker info --format '{{.Swarm.ControlAvailable}}' 2>/dev/null || echo "false")
+
+  if [[ "$state" == "active" && "$role" == "true" ]]; then
+    log "Docker Swarm already initialized and this node is a manager."
+    return
+  fi
+
+  if [[ "$state" == "active" && "$role" != "true" ]]; then
+    warn "This node is part of a swarm but is not a manager."
+    echo "You can join as a manager using an existing join command or re-initialize as a new manager."
+    local ans
+    ans=$(prompt_default "Convert this node to manager? (Y/N)" "Y")
+    if [[ "$ans" =~ ^[Yy]$ ]]; then
+      ip=$(prompt_default "Enter IP address to advertise" "$(hostname -I | awk '{print $1}')")
+      log "Leaving current swarm..."
+      docker swarm leave --force || true
+      log "Initializing Swarm as manager..."
+      docker swarm init --advertise-addr "$ip" || true
+      return
+    else
+      read -rp "Enter manager join command (or leave blank to abort): " join_cmd
+      if [[ -n "$join_cmd" ]]; then
+        eval "$join_cmd"
+        log "Joined swarm as a manager."
+      else
+        err "Aborting. This node must be a Swarm manager to deploy the stack."
+        exit 1
+      fi
+    fi
+    return
+  fi
+
+  # Not part of a swarm yet
+  warn "This node is not part of any Docker Swarm."
+  ip=$(prompt_default "Enter IP address to advertise for new Swarm manager" "$(hostname -I | awk '{print $1}')")
+  log "Initializing Swarm as manager on IP $ip..."
+  docker swarm init --advertise-addr "$ip" || true
+  log "Swarm initialized. This node is now a manager."
+}
+install_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    log "Docker already installed."
+    return
+  fi
+  log "Installing Docker Engine..."
+  if [[ -e /etc/debian_version ]]; then
+    apt-get update -y
+    apt-get install -y ca-certificates curl gnupg lsb-release
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg \
+      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(. /etc/os-release; echo "$VERSION_CODENAME") stable" \
+      > /etc/apt/sources.list.d/docker.list
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq
+    systemctl enable --now docker
+  else
+    err "This installer currently supports Debian/Ubuntu. Please install Docker manually."
+    exit 1
+  fi
+}
 #!/usr/bin/env bash
 set -euo pipefail
 
