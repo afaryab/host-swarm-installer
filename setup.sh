@@ -585,10 +585,7 @@ main() {
     case "$choice" in
       1)
         log "Updating existing deployment..."
-        create_dirs
-        create_networks
-        write_env_and_stack "$DNS_ROOT" "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$KEYCLOAK_HOST" "$N8N_HOST" "$PDNS_ADMIN_HOST" "$WANT_LOCAL_SERVER_MANAGER" "$REMOTE_URL" "$REMOTE_SECRET"
-        deploy_stack
+        # For updates, we'll collect the configuration and then regenerate
         ;;
       2)
         log "Stopping and removing existing stack..."
