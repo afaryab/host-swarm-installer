@@ -365,8 +365,8 @@ services:
       placement:
         constraints: [node.role == manager]
 
-  dns:
-    image: pschiffe/pdns-auth-46:latest
+    dns:
+    image: powerdns/pdns-auth-46:latest
     environment:
       PDNS_gmysql_host: dns-db
       PDNS_gmysql_user: ${PDNS_DB_USER}
@@ -377,8 +377,17 @@ services:
       PDNS_webserver: "yes"
       PDNS_webserver_address: 0.0.0.0
       PDNS_webserver_port: 8081
+    ports:
+      - target: 53
+        published: 53
+        protocol: tcp
+        mode: host
+      - target: 53
+        published: 53
+        protocol: udp
+        mode: host
     volumes:
-      - /mnt/hosting/infrastructure/dns/conf.d:/etc/powerdns
+      # keep zones mount only (optional)
       - /mnt/hosting/infrastructure/dns/zones:/zones
     networks:
       - infra-net
@@ -389,6 +398,7 @@ services:
         constraints: [node.role == manager]
       labels:
         - "traefik.enable=false"
+
 
   # ----------------
   # PowerDNS-Admin (UI) 
