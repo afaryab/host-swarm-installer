@@ -365,8 +365,8 @@ services:
       placement:
         constraints: [node.role == manager]
 
-    dns:
-    image: powerdns/pdns-auth-46:latest
+  dns:
+    image: pschiffe/pdns-auth-46:latest
     environment:
       PDNS_gmysql_host: dns-db
       PDNS_gmysql_user: ${PDNS_DB_USER}
