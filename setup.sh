@@ -5,61 +5,29 @@ set -euo pipefail
 # Host-Swarm Infrastructure Installer
 # =========================
 # - Installs Docker (Debian/Ubuntu) and initializes Swarm (asks for advertised IP)
-# - Creates /mnt/hosting/infrastructure with local bind-mounts (no named volumes)
-# - Prompts for DNS root and service domains + ACME email
-# - Deploys a single Swarm stack "infrastructure" containing:
-#     traefik, portainer, keycloak(+postgres), n8n(+postgres), dns(powerdns+mariadb), dns-admin
-# - Adds commented placeholders for server_manager and swarm-connect
-# - Sets up daily usage JSON snapshots for later billing export via n8n
+write_env_and_stack() {
+  local BASE="/mnt/hosting/infrastructure"
+  local DNS_ROOT="$1" ACME_EMAIL="$2" TRAEFIK_HOST="$3" PORTAINER_HOST="$4" KEYCLOAK_HOST="$5" N8N_HOST="$6" PDNS_ADMIN_HOST="$7"
+  local WANT_LOCAL_SERVER_MANAGER="$8" REMOTE_SERVER_MANAGER_URL="$9" REMOTE_SERVER_MANAGER_SECRET="${10}"
 
-# ===== Helpers =====
-require_root() {
-  if [[ ${EUID} -ne 0 ]]; then
-    echo "Please run as root (sudo)." >&2
-    exit 1
-  fi
-}
-log() { echo -e "\033[1;32m[+] $*\033[0m"; }
-warn() { echo -e "\033[1;33m[!] $*\033[0m"; }
-err() { echo -e "\033[1;31m[✗] $*\033[0m"; }
+  # Generate secrets first (shell-time, NOT compose-time)
+  KC_DB="processton-keycloak"
+  KC_DB_USER="processtonkeycloak"
+  KC_DB_PASS=$(openssl rand -hex 12)
+  KC_BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 8)
 
-prompt_default() {
-  local prompt="$1"; local default="$2"; local var
-  read -rp "$prompt [$default]: " var || true
-  echo "${var:-$default}"
-}
+  N8N_DB="n8n"
+  N8N_DB_USER="n8n"
+  N8N_DB_PASS=$(openssl rand -hex 12)
+  N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)
 
-# ===== Install Docker =====
-install_docker() {
-  if command -v docker >/dev/null 2>&1; then
-    log "Docker already installed."
-    return
-  fi
-  log "Installing Docker Engine..."
-  if [[ -e /etc/debian_version ]]; then
-    apt-get update -y
-    apt-get install -y ca-certificates curl gnupg lsb-release
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg \
-      | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
-    echo \
-"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(. /etc/os-release; echo "$VERSION_CODENAME") stable" \
-      > /etc/apt/sources.list.d/docker.list
-    apt-get update -y
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq
-    systemctl enable --now docker
-  else
-    err "This installer currently supports Debian/Ubuntu. Please install Docker manually."
-    exit 1
-  fi
-}
+  PDNS_DB="pdns"
+  PDNS_DB_USER="pdns"
+  PDNS_DB_PASS=$(openssl rand -hex 12)
+  PDNS_API_KEY=$(openssl rand -hex 16)
+  PDA_SECRET_KEY=$(openssl rand -hex 24)
 
-# ===== Swarm Init / Ensure Manager (asks for IP) =====
-ensure_swarm() {
-  local state role ip
-  state=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || echo "inactive")
-  role=$(docker info --format '{{.Swarm.ControlAvailable}}' 2>/dev/null || echo "false")
+  cat > "$BASE/infrastructure.stack.yml" <<STACK
 
   if [[ "$state" == "active" && "$role" == "true" ]]; then
     log "Docker Swarm already initialized and this node is a manager."
@@ -504,9 +472,6 @@ deploy_stack() {
     exit 1
   fi
   log "Deploying stack 'infrastructure'..."
-  if [[ -f "$BASE/.env" ]]; then
-    set -a; . "$BASE/.env"; set +a
-  fi
   docker stack deploy -c "$BASE/infrastructure.stack.yml" --with-registry-auth infrastructure
 }
 
@@ -582,6 +547,24 @@ main() {
   require_root
   install_docker
   ensure_swarm
+
+  local BASE="/mnt/hosting/infrastructure"
+  if [[ -d "$BASE" && -f "$BASE/infrastructure.stack.yml" ]]; then
+    warn "Existing installation detected in $BASE."
+    read -rp "Do you want to clear the previous installation and redeploy? [y/N]: " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      log "Stopping and removing existing stack..."
+      docker stack rm infrastructure || true
+      sleep 5
+      log "Removing old files..."
+      rm -rf "$BASE"/*
+      log "Old installation cleared."
+    else
+      err "Aborting installation."
+      exit 1
+    fi
+  fi
+
   create_dirs
   create_networks
 
