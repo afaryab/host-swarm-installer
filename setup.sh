@@ -355,6 +355,9 @@ services:
       MYSQL_USER: ${PDNS_DB_USER}
       MYSQL_PASSWORD: ${PDNS_DB_PASS}
       MYSQL_ROOT_PASSWORD: ${PDNS_DB_PASS}
+      # Ensure proper initialization
+      MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+      MYSQL_RANDOM_ROOT_PASSWORD: "no"
     volumes:
       - /mnt/hosting/infrastructure/dns/db:/var/lib/mysql
     networks:
@@ -362,6 +365,13 @@ services:
     deploy:
       placement:
         constraints: [node.role == manager]
+    # Add healthcheck to ensure database is ready
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${PDNS_DB_USER}", "-p${PDNS_DB_PASS}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   dns:
     image: powerdns/pdns-auth-46:latest
@@ -395,11 +405,14 @@ services:
   dns-admin:
     image: powerdnsadmin/pda-legacy:latest
     environment:
-      SQLALCHEMY_DATABASE_URI: mysql://${PDNS_DB_USER}:${PDNS_DB_PASS}@dns-db/${PDNS_DB}
+      SQLALCHEMY_DATABASE_URI: mysql://${PDNS_DB_USER}:${PDNS_DB_PASS}@dns-db/${PDNS_DB}?charset=utf8mb4
       PDNS_API_URL: http://dns:8081
       PDNS_API_KEY: ${PDNS_API_KEY}
       GUNICORN_TIMEOUT: 300
       SECRET_KEY: ${PDA_SECRET_KEY}
+      # Database connection settings
+      SQLALCHEMY_TRACK_MODIFICATIONS: "False"
+      SQLALCHEMY_ENGINE_OPTIONS: '{"pool_pre_ping": true, "pool_recycle": 300}'
     depends_on:
       - dns
       - dns-db
@@ -408,6 +421,16 @@ services:
       - /mnt/hosting/infrastructure/dns-admin/secrets:/secrets
     networks:
       - infra-net
+      - traefik-net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 60s
       - traefik-net
     deploy:
       replicas: 1
@@ -562,6 +585,10 @@ main() {
     case "$choice" in
       1)
         log "Updating existing deployment..."
+        create_dirs
+        create_networks
+        write_env_and_stack "$DNS_ROOT" "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$KEYCLOAK_HOST" "$N8N_HOST" "$PDNS_ADMIN_HOST" "$WANT_LOCAL_SERVER_MANAGER" "$REMOTE_URL" "$REMOTE_SECRET"
+        deploy_stack
         ;;
       2)
         log "Stopping and removing existing stack..."
