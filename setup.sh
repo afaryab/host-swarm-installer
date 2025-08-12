@@ -431,11 +431,6 @@ services:
         delay: 10s
         max_attempts: 5
         window: 60s
-      - traefik-net
-    deploy:
-      replicas: 1
-      placement:
-        constraints: [node.role == manager]
       labels:
         - "traefik.enable=true"
         - "traefik.swarm.network=traefik-net"
