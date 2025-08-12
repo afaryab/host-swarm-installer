@@ -421,18 +421,6 @@ services:
         - "traefik.http.routers.pda.tls=true"
         - "traefik.http.routers.pda.tls.certresolver=le"
         - "traefik.http.services.pda.loadbalancer.server.port=80"
-
-networks:
-  traefik-net:
-    external: true
-  infra-net:
-    external: true
-
-services:
-
-  # ----------------
-  # Traefik (edge)
-  # ----------------
   traefik:
     image: traefik:v3.4
     command:
