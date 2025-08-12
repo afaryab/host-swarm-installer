@@ -83,9 +83,6 @@ prompt_default() {
   echo "${var:-$default}"
 }
 
-#!/usr/bin/env bash
-set -euo pipefail
-
 # =========================
 # Host-Swarm Infrastructure Installer
 # =========================
