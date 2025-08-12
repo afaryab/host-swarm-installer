@@ -46,7 +46,7 @@ write_env_and_stack() {
   PDNS_API_KEY=$(openssl rand -hex 16)
   PDA_SECRET_KEY=$(openssl rand -hex 24)
 
-  cat > "$BASE/infrastructure.stack.yml" <<STACK
+  cat > "$BASE/docker-compose.yml" <<STACK
 
   if [[ "$state" == "active" && "$role" == "true" ]]; then
     log "Docker Swarm already initialized and this node is a manager."
@@ -491,7 +491,7 @@ deploy_stack() {
     exit 1
   fi
   log "Deploying stack 'infrastructure'..."
-  docker stack deploy -c "$BASE/infrastructure.stack.yml" --with-registry-auth infrastructure
+  docker stack deploy -c "$BASE/docker-compose.yml" --with-registry-auth infrastructure
 }
 
 # ===== Metrics =====
@@ -568,7 +568,7 @@ main() {
   ensure_swarm
 
   local BASE="/mnt/hosting/infrastructure"
-  if [[ -d "$BASE" && -f "$BASE/infrastructure.stack.yml" ]]; then
+  if [[ -d "$BASE" && -f "$BASE/docker-compose.yml" ]]; then
     warn "Existing installation detected in $BASE."
     read -rp "Do you want to clear the previous installation and redeploy? [y/N]: " confirm
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
