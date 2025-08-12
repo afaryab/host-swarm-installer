@@ -209,8 +209,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /mnt/hosting/infrastructure/portainer/data:/data
-    ports:
-      - "9000:9000"
     networks:
       - traefik-net
     deploy:
@@ -366,7 +364,7 @@ services:
         constraints: [node.role == manager]
 
   dns:
-    image: pschiffe/pdns-auth-46:latest
+    image: powerdns/pdns-auth-46:latest
     environment:
       PDNS_gmysql_host: dns-db
       PDNS_gmysql_user: ${PDNS_DB_USER}
@@ -377,15 +375,6 @@ services:
       PDNS_webserver: "yes"
       PDNS_webserver_address: 0.0.0.0
       PDNS_webserver_port: 8081
-    ports:
-      - target: 53
-        published: 53
-        protocol: tcp
-        mode: host
-      - target: 53
-        published: 53
-        protocol: udp
-        mode: host
     volumes:
       # keep zones mount only (optional)
       - /mnt/hosting/infrastructure/dns/zones:/zones
