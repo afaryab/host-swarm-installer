@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ===== Helpers =====
+require_root() {
+  if [[ ${EUID} -ne 0 ]]; then
+    echo "Please run as root (sudo)." >&2
+    exit 1
+  fi
+}
+log() { echo -e "\033[1;32m[+] $*\033[0m"; }
+warn() { echo -e "\033[1;33m[!] $*\033[0m"; }
+err() { echo -e "\033[1;31m[✗] $*\033[0m"; }
+prompt_default() {
+  local prompt="$1"; local default="$2"; local var
+  read -rp "$prompt [$default]: " var || true
+  echo "${var:-$default}"
+}
+
+#!/usr/bin/env bash
+set -euo pipefail
+
 # =========================
 # Host-Swarm Infrastructure Installer
 # =========================
