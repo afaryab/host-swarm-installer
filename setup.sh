@@ -193,6 +193,7 @@ services:
         - "traefik.http.routers.traefik.service=api@internal"
         - "traefik.http.routers.traefik.tls=true"
         - "traefik.http.routers.traefik.tls.certresolver=le"
+        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
         - "traefik.http.routers.http-catchall.rule=HostRegexp(\`{host:.+}\`)"
         - "traefik.http.routers.http-catchall.entrypoints=web"
         - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
