@@ -144,6 +144,10 @@ PDNS_DB_PASS=$(openssl rand -hex 12)
 # ----- PDNS API KEY -----
 PDNS_API_KEY=$(openssl rand -hex 16)
 
+# ----- One-time secrets generated here -----
+KC_BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 8)
+PDA_SECRET_KEY=$(openssl rand -hex 24)
+
 # ----- OPTIONAL REMOTE SERVER MANAGER PLACEHOLDERS -----
 REMOTE_SERVER_MANAGER_URL=${REMOTE_SERVER_MANAGER_URL}
 REMOTE_SERVER_MANAGER_SECRET=${REMOTE_SERVER_MANAGER_SECRET}
@@ -267,7 +271,7 @@ services:
       KC_METRICS_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: $(openssl rand -hex 8)
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
     command: ["start"]
     volumes:
       - /mnt/hosting/infrastructure/keycloak/data:/opt/keycloak/data
@@ -424,7 +428,7 @@ services:
       PDNS_API_URL: http://dns:8081
       PDNS_API_KEY: ${PDNS_API_KEY}
       GUNICORN_TIMEOUT: 300
-      SECRET_KEY: $(openssl rand -hex 24)
+      SECRET_KEY: ${PDA_SECRET_KEY}
     depends_on:
       - dns
       - dns-db
@@ -483,6 +487,12 @@ STACK
 deploy_stack() {
   local BASE="/mnt/hosting/infrastructure"
   log "Deploying stack 'infrastructure'..."
+  # Export variables from .env so docker does substitution reliably
+  if [[ -f "$BASE/.env" ]]; then
+    set -a
+    . "$BASE/.env"
+    set +a
+  fi
   docker stack deploy -c "$BASE/infrastructure.stack.yml" --with-registry-auth infrastructure
 }
 
