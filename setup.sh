@@ -553,18 +553,29 @@ main() {
   local BASE="/mnt/hosting/infrastructure"
   if [[ -d "$BASE" && -f "$BASE/docker-compose.yml" ]]; then
     warn "Existing installation detected in $BASE."
-    read -rp "Do you want to clear the previous installation and redeploy? [y/N]: " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-      log "Stopping and removing existing stack..."
-      docker stack rm infrastructure || true
-      sleep 5
-      log "Removing old files..."
-      rm -rf "$BASE"/*
-      log "Old installation cleared."
-    else
-      err "Aborting installation."
-      exit 1
-    fi
+    echo "What would you like to do?"
+    echo "  1) Update existing deployment (regenerate docker-compose.yml and redeploy)"
+    echo "  2) Clear previous installation completely and redeploy"
+    echo "  3) Abort installation"
+    choice=$(prompt_default "Choose 1, 2, or 3" "1")
+    
+    case "$choice" in
+      1)
+        log "Updating existing deployment..."
+        ;;
+      2)
+        log "Stopping and removing existing stack..."
+        docker stack rm infrastructure || true
+        sleep 5
+        log "Removing old files..."
+        rm -rf "$BASE"/*
+        log "Old installation cleared."
+        ;;
+      3|*)
+        err "Aborting installation."
+        exit 1
+        ;;
+    esac
   fi
 
   create_dirs
