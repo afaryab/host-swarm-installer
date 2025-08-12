@@ -393,9 +393,9 @@ services:
   # PowerDNS-Admin (UI) 
   # ----------------
   dns-admin:
-    image: ngoduykhanh/powerdns-admin:latest
+    image: powerdnsadmin/pda-legacy:latest
     environment:
-      SQLALCHEMY_DATABASE_URI: mysql+pymysql://${PDNS_DB_USER}:${PDNS_DB_PASS}@dns-db/${PDNS_DB}
+      SQLALCHEMY_DATABASE_URI: mysql://${PDNS_DB_USER}:${PDNS_DB_PASS}@dns-db/${PDNS_DB}
       PDNS_API_URL: http://dns:8081
       PDNS_API_KEY: ${PDNS_API_KEY}
       GUNICORN_TIMEOUT: 300
