@@ -73,7 +73,6 @@ create_dirs() {
     "$BASE/traefik/letsencrypt" \
     "$BASE/portainer/data" \
     "$BASE/keycloak/data" "$BASE/keycloak/postgres" \
-    "$BASE/n8n/data" "$BASE/n8n/postgres" \
     "$BASE/dns/conf.d" "$BASE/dns/zones" "$BASE/dns/db" \
     "$BASE/dns-admin/uploads" "$BASE/dns-admin/secrets" \
     "$BASE/shared" \
@@ -111,22 +110,16 @@ write_env_and_stack() {
   local TRAEFIK_HOST="$3"
   local PORTAINER_HOST="$4"
   local KEYCLOAK_HOST="$5"
-  local N8N_HOST="$6"
-  local PDNS_ADMIN_HOST="$7"
-  local WANT_LOCAL_SERVER_MANAGER="$8"
-  local REMOTE_SERVER_MANAGER_URL="$9"
-  local REMOTE_SERVER_MANAGER_SECRET="${10}"
+  local PDNS_ADMIN_HOST="$6"
+  local WANT_LOCAL_SERVER_MANAGER="$7"
+  local REMOTE_SERVER_MANAGER_URL="$8"
+  local REMOTE_SERVER_MANAGER_SECRET="$9"
 
   # Generate secrets first (shell-time, NOT compose-time)
   local KC_DB="processton-keycloak"
   local KC_DB_USER="processtonkeycloak"
   local KC_DB_PASS=$(openssl rand -hex 12)
   local KC_BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 8)
-
-  local N8N_DB="n8n"
-  local N8N_DB_USER="n8n"
-  local N8N_DB_PASS=$(openssl rand -hex 12)
-  local N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)
 
   local PDNS_DB="pdns"
   local PDNS_DB_USER="pdns"
@@ -287,58 +280,6 @@ services:
       POSTGRES_PASSWORD: ${KC_DB_PASS}
     volumes:
       - /mnt/hosting/infrastructure/keycloak/postgres:/var/lib/postgresql/data
-    networks:
-      - infra-net
-    deploy:
-      placement:
-        constraints: [node.role == manager]
-
-  # ----------------
-  # n8n + Postgres
-  # ----------------
-  n8n:
-    image: n8nio/n8n:latest
-    environment:
-      N8N_HOST: ${N8N_HOST}
-      N8N_PORT: 5678
-      WEBHOOK_URL: https://${N8N_HOST}/
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: n8n-db
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${N8N_DB}
-      DB_POSTGRESDB_USER: ${N8N_DB_USER}
-      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASS}
-      EXECUTIONS_MODE: regular
-      GENERIC_TIMEZONE: Asia/Karachi
-    volumes:
-      - /mnt/hosting/infrastructure/n8n/data:/home/node/.n8n
-    depends_on:
-      - n8n-db
-    networks:
-      - infra-net
-      - traefik-net
-    deploy:
-      replicas: 1
-      placement:
-        constraints: [node.role == manager]
-      labels:
-        - "traefik.enable=true"
-        - "traefik.swarm.network=traefik-net"
-        - "traefik.http.routers.n8n.rule=Host(\`${N8N_HOST}\`)"
-        - "traefik.http.routers.n8n.entrypoints=websecure"
-        - "traefik.http.routers.n8n.tls=true"
-        - "traefik.http.routers.n8n.tls.certresolver=le"
-        - "traefik.http.services.n8n.loadbalancer.server.port=5678"
-
-  n8n-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: ${N8N_DB}
-      POSTGRES_USER: ${N8N_DB_USER}
-      POSTGRES_PASSWORD: ${N8N_DB_PASS}
-    volumes:
-      - /mnt/hosting/infrastructure/n8n/postgres:/var/lib/postgresql/data
     networks:
       - infra-net
     deploy:
@@ -609,7 +550,6 @@ main() {
   TRAEFIK_HOST=$(prompt_default "Traefik dashboard domain" "traefik.${DNS_ROOT}")
   PORTAINER_HOST=$(prompt_default "Portainer domain" "port.${DNS_ROOT}")
   KEYCLOAK_HOST=$(prompt_default "Keycloak domain" "employee-id.${DNS_ROOT}")
-  N8N_HOST=$(prompt_default "n8n domain" "n8n.${DNS_ROOT}")
   PDNS_ADMIN_HOST=$(prompt_default "PowerDNS-Admin domain" "dns-admin.${DNS_ROOT}")
 
   echo
@@ -624,7 +564,7 @@ main() {
     REMOTE_SECRET=$(prompt_default "Remote server_manager secret" "$(openssl rand -hex 16)")
   fi
 
-  write_env_and_stack "$DNS_ROOT" "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$KEYCLOAK_HOST" "$N8N_HOST" "$PDNS_ADMIN_HOST" "$CHOICE" "$REMOTE_URL" "$REMOTE_SECRET"
+  write_env_and_stack "$DNS_ROOT" "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$KEYCLOAK_HOST" "$PDNS_ADMIN_HOST" "$CHOICE" "$REMOTE_URL" "$REMOTE_SECRET"
 
   deploy_stack
   setup_metrics_timer
@@ -634,7 +574,6 @@ main() {
   log "Traefik:     https://${TRAEFIK_HOST}"
   log "Portainer:   https://${PORTAINER_HOST}"
   log "Keycloak:    https://${KEYCLOAK_HOST}"
-  log "n8n:         https://${N8N_HOST}"
   log "DNS-Admin:   https://${PDNS_ADMIN_HOST}"
   echo
   warn "Remember to point service domains to this host (A/AAAA) or via CNAME to ${DNS_ROOT} (per your plan)."
