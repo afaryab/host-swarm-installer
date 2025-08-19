@@ -2,7 +2,16 @@
 set -euo pipefail
 
 # =========================
-# Host-Swarm Infrastructure
+# create_dirs() {
+  BASE="/mnt/hosting/infrastructure"
+  mkdir -p "$BASE/traefik/letsencrypt" \
+           "$BASE/portainer/data" \
+           "$BASE/shared" \
+           "$BASE/metrics"
+  chmod 600 "$BASE/traefik/letsencrypt" || true
+  touch "$BASE/traefik/letsencrypt/acme.json"
+  chmod 600 "$BASE/traefik/letsencrypt/acme.json"
+}Infrastructure
 # =========================
 # This script installs Docker + Swarm, prepares /mnt/hosting/infrastructure,
 # asks for domains & ACME email, then deploys a single Swarm stack: "infrastructure".
