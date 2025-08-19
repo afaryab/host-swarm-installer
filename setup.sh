@@ -159,6 +159,7 @@ services:
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
       - --log.level=INFO
+      - --accesslog=true
     ports:
       - target: 80
         published: 80
