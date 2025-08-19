@@ -71,6 +71,7 @@ create_dirs() {
   BASE="/mnt/hosting/infrastructure"
   mkdir -p \
     "$BASE/traefik/letsencrypt" \
+    "$BASE/traefik/dynamic" \
     "$BASE/portainer/data" \
     "$BASE/keycloak/data" "$BASE/keycloak/postgres" \
     "$BASE/dns/conf.d" "$BASE/dns/zones" "$BASE/dns/db" \
@@ -148,6 +149,8 @@ services:
       - --providers.swarm=true
       - --providers.swarm.network=traefik-net
       - --providers.swarm.exposedByDefault=false
+      - --providers.file.directory=/dynamic
+      - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --entrypoints.traefik.address=:8080
@@ -172,10 +175,12 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /mnt/hosting/infrastructure/traefik/letsencrypt:/letsencrypt
+      - /mnt/hosting/infrastructure/traefik/dynamic:/dynamic
     networks:
       - traefik-net
     deploy:
-      mode: global
+      mode: replicated
+      replicas: 1
       placement:
         constraints: [node.role == manager]
       labels:
