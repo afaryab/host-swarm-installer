@@ -72,6 +72,7 @@ ensure_swarm() {
 create_dirs() {
   BASE="/mnt/hosting/infrastructure"
   mkdir -p "$BASE/traefik/letsencrypt" \
+           "$BASE/traefik/dynamic" \
            "$BASE/portainer/data" \
            "$BASE/shared" \
            "$BASE/metrics"
