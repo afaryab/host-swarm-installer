@@ -55,7 +55,9 @@ install_docker() {
 }
 
 ensure_swarm() {
-  if docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -qi 'active'; then
+  local swarm_state
+  swarm_state=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null)
+  if [[ "$swarm_state" == "active" ]]; then
     log "Docker Swarm already initialized."
   else
     # figure out advertise address (best effort)
