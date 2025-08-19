@@ -6,7 +6,7 @@ set -euo pipefail
 # =========================
 # This script installs Docker + Swarm, prepares /mnt/hosting/infrastructure,
 # asks for domains & ACME email, then deploys a single Swarm stack: "infrastructure".
-# Services: traefik, portainer, keycloak(+pg), n8n(+pg), dns(powerdns + mariadb), dns-admin.
+# Services: traefik, portainer.
 # It also sets up day-wise usage JSON exports for future billing.
 # No Docker named volumes are used; everything is mounted from local folders.
 
@@ -69,34 +69,14 @@ ensure_swarm() {
 
 create_dirs() {
   BASE="/mnt/hosting/infrastructure"
-  mkdir -p \
-    "$BASE/traefik/letsencrypt" \
-    "$BASE/traefik/dynamic" \
-    "$BASE/portainer/data" \
-    "$BASE/keycloak/data" "$BASE/keycloak/postgres" \
-    "$BASE/dns/conf.d" "$BASE/dns/zones" "$BASE/dns/db" \
-    "$BASE/dns-admin/uploads" "$BASE/dns-admin/secrets" \
-    "$BASE/shared" \
+  mkdir -p 
+    "$BASE/traefik/letsencrypt" 
+    "$BASE/portainer/data" 
+    "$BASE/shared" 
     "$BASE/metrics"
   chmod 600 "$BASE/traefik/letsencrypt" || true
   touch "$BASE/traefik/letsencrypt/acme.json"
   chmod 600 "$BASE/traefik/letsencrypt/acme.json"
-
-  # Default PDNS config (minimal authoritative + gmysql)
-  if [[ ! -f "$BASE/dns/conf.d/pdns.conf" ]]; then
-    cat > "$BASE/dns/conf.d/pdns.conf" <<'EOF'
-launch=gmysql
-gmysql-host=dns-db
-gmysql-user=pdns
-gmysql-password=pdns-pass
-gmysql-dbname=pdns
-api=yes
-api-key=changeme-api-key
-webserver=yes
-webserver-address=0.0.0.0
-webserver-port=8081
-EOF
-  fi
 }
 
 create_networks() {
@@ -106,27 +86,12 @@ create_networks() {
 
 write_env_and_stack() {
   local BASE="/mnt/hosting/infrastructure"
-  local DNS_ROOT="$1"
-  local ACME_EMAIL="$2"
-  local TRAEFIK_HOST="$3"
-  local PORTAINER_HOST="$4"
-  local KEYCLOAK_HOST="$5"
-  local PDNS_ADMIN_HOST="$6"
-  local WANT_LOCAL_SERVER_MANAGER="$7"
-  local REMOTE_SERVER_MANAGER_URL="$8"
-  local REMOTE_SERVER_MANAGER_SECRET="$9"
-
-  # Generate secrets first (shell-time, NOT compose-time)
-  local KC_DB="processton-keycloak"
-  local KC_DB_USER="processtonkeycloak"
-  local KC_DB_PASS=$(openssl rand -hex 12)
-  local KC_BOOTSTRAP_ADMIN_PASSWORD=$(openssl rand -hex 8)
-
-  local PDNS_DB="pdns"
-  local PDNS_DB_USER="pdns"
-  local PDNS_DB_PASS=$(openssl rand -hex 12)
-  local PDNS_API_KEY=$(openssl rand -hex 16)
-  local PDA_SECRET_KEY=$(openssl rand -hex 24)
+  local ACME_EMAIL="$1"
+  local TRAEFIK_HOST="$2"
+  local PORTAINER_HOST="$3"
+  local WANT_LOCAL_SERVER_MANAGER="$4"
+  local REMOTE_SERVER_MANAGER_URL="$5"
+  local REMOTE_SERVER_MANAGER_SECRET="$6"
 
   # Generate docker-compose.yml with inlined values (no .env file)
   cat > "$BASE/docker-compose.yml" <<STACK
@@ -228,164 +193,6 @@ services:
         - "traefik.http.routers.port-http.rule=Host(\`${PORTAINER_HOST}\`)"
         - "traefik.http.routers.port-http.entrypoints=web"
         - "traefik.http.routers.port-http.middlewares=port-redirect"
-
-  # ----------------
-  # Keycloak + Postgres
-  # ----------------
-  keycloak:
-    image: quay.io/keycloak/keycloak:latest
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KC_DB}
-      KC_DB_USERNAME: ${KC_DB_USER}
-      KC_DB_PASSWORD: ${KC_DB_PASS}
-      KC_HOSTNAME: ${KEYCLOAK_HOST}
-      KC_HTTP_ENABLED: "true"
-      KC_METRICS_ENABLED: "true"
-      KC_PROXY_HEADERS: xforwarded
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
-    command: ["start"]
-    volumes:
-      - /mnt/hosting/infrastructure/keycloak/data:/opt/keycloak/data
-    depends_on:
-      - keycloak-db
-    networks:
-      - infra-net
-      - traefik-net
-    deploy:
-      replicas: 1
-      placement:
-        constraints: [node.role == manager]
-      resources:
-        limits:
-          cpus: "1"
-          memory: 1024M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
-      labels:
-        - "traefik.enable=true"
-        - "traefik.swarm.network=traefik-net"
-        - "traefik.http.middlewares.kc-redirect.redirectscheme.scheme=https"
-        - "traefik.http.middlewares.kc-redirect.redirectscheme.permanent=true"
-        - "traefik.http.routers.kc.rule=Host(\`${KEYCLOAK_HOST}\`)"
-        - "traefik.http.routers.kc.entrypoints=websecure"
-        - "traefik.http.routers.kc.tls=true"
-        - "traefik.http.routers.kc.tls.certresolver=le"
-        - "traefik.http.services.kc.loadbalancer.server.port=8080"
-        - "traefik.http.routers.kc-http.rule=Host(\`${KEYCLOAK_HOST}\`)"
-        - "traefik.http.routers.kc-http.entrypoints=web"
-        - "traefik.http.routers.kc-http.middlewares=kc-redirect"
-
-  keycloak-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: ${KC_DB}
-      POSTGRES_USER: ${KC_DB_USER}
-      POSTGRES_PASSWORD: ${KC_DB_PASS}
-    volumes:
-      - /mnt/hosting/infrastructure/keycloak/postgres:/var/lib/postgresql/data
-    networks:
-      - infra-net
-    deploy:
-      placement:
-        constraints: [node.role == manager]
-
-  # ----------------
-  # PowerDNS (authoritative) + MariaDB
-  # ----------------
-  dns-db:
-    image: mariadb:10.11
-    environment:
-      MYSQL_DATABASE: ${PDNS_DB}
-      MYSQL_USER: ${PDNS_DB_USER}
-      MYSQL_PASSWORD: ${PDNS_DB_PASS}
-      MYSQL_ROOT_PASSWORD: ${PDNS_DB_PASS}
-      # Ensure proper initialization
-      MYSQL_ALLOW_EMPTY_PASSWORD: "no"
-      MYSQL_RANDOM_ROOT_PASSWORD: "no"
-    volumes:
-      - /mnt/hosting/infrastructure/dns/db:/var/lib/mysql
-    networks:
-      - infra-net
-    deploy:
-      placement:
-        constraints: [node.role == manager]
-    # Add healthcheck to ensure database is ready
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${PDNS_DB_USER}", "-p${PDNS_DB_PASS}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  dns:
-    image: powerdns/pdns-auth-46:latest
-    environment:
-      PDNS_gmysql_host: dns-db
-      PDNS_gmysql_user: ${PDNS_DB_USER}
-      PDNS_gmysql_password: ${PDNS_DB_PASS}
-      PDNS_gmysql_dbname: ${PDNS_DB}
-      PDNS_api: "yes"
-      PDNS_api_key: ${PDNS_API_KEY}
-      PDNS_webserver: "yes"
-      PDNS_webserver_address: 0.0.0.0
-      PDNS_webserver_port: 8081
-    volumes:
-      # keep zones mount only (optional)
-      - /mnt/hosting/infrastructure/dns/zones:/zones
-    networks:
-      - infra-net
-      - traefik-net
-    deploy:
-      replicas: 1
-      placement:
-        constraints: [node.role == manager]
-      labels:
-        - "traefik.enable=false"
-
-
-  # ----------------
-  # PowerDNS-Admin (UI) 
-  # ----------------
-  dns-admin:
-    image: powerdnsadmin/pda-legacy:latest
-    environment:
-      SQLALCHEMY_DATABASE_URI: mysql://${PDNS_DB_USER}:${PDNS_DB_PASS}@dns-db/${PDNS_DB}?charset=utf8mb4
-      PDNS_API_URL: http://dns:8081
-      PDNS_API_KEY: ${PDNS_API_KEY}
-      GUNICORN_TIMEOUT: 300
-      SECRET_KEY: ${PDA_SECRET_KEY}
-      # Database connection settings
-      SQLALCHEMY_TRACK_MODIFICATIONS: "False"
-      SQLALCHEMY_ENGINE_OPTIONS: '{"pool_pre_ping": true, "pool_recycle": 300}'
-    depends_on:
-      - dns
-      - dns-db
-    volumes:
-      - /mnt/hosting/infrastructure/dns-admin/uploads:/uploads
-      - /mnt/hosting/infrastructure/dns-admin/secrets:/secrets
-    networks:
-      - infra-net
-      - traefik-net
-    deploy:
-      replicas: 1
-      placement:
-        constraints: [node.role == manager]
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 5
-        window: 60s
-      labels:
-        - "traefik.enable=true"
-        - "traefik.swarm.network=traefik-net"
-        - "traefik.http.routers.pda.rule=Host(\`${PDNS_ADMIN_HOST}\`)"
-        - "traefik.http.routers.pda.entrypoints=websecure"
-        - "traefik.http.routers.pda.tls=true"
-        - "traefik.http.routers.pda.tls.certresolver=le"
-        - "traefik.http.services.pda.loadbalancer.server.port=80"
 
   # ----------------
   # Placeholders (commented out for now)
@@ -549,14 +356,12 @@ main() {
 
   echo
   echo "=== Domain & ACME configuration ==="
-  DNS_ROOT=$(prompt_default "Primary DNS server domain (authoritative; used for defaults)" "dns.example.com")
-  ACME_EMAIL=$(prompt_default "Email for Let's Encrypt/ACME" "admin@${DNS_ROOT}")
+  PRIMARY_DOMAIN=$(prompt_default "Primary domain for setup" "example.com")
+  ACME_EMAIL=$(prompt_default "Email for Let's Encrypt/ACME" "admin@${PRIMARY_DOMAIN}")
 
-  # sensible service defaults under the same DNS root
-  TRAEFIK_HOST=$(prompt_default "Traefik dashboard domain" "traefik.${DNS_ROOT}")
-  PORTAINER_HOST=$(prompt_default "Portainer domain" "port.${DNS_ROOT}")
-  KEYCLOAK_HOST=$(prompt_default "Keycloak domain" "employee-id.${DNS_ROOT}")
-  PDNS_ADMIN_HOST=$(prompt_default "PowerDNS-Admin domain" "dns-admin.${DNS_ROOT}")
+  # Service domain configuration with primary domain defaults
+  TRAEFIK_HOST=$(prompt_default "Traefik dashboard domain" "traefik.${PRIMARY_DOMAIN}")
+  PORTAINER_HOST=$(prompt_default "Portainer domain" "portainer.${PRIMARY_DOMAIN}")
 
   echo
   echo "=== Server Manager placeholders ==="
@@ -566,23 +371,22 @@ main() {
   CHOICE=$(prompt_default "Choose 1 or 2" "1")
   REMOTE_URL=""; REMOTE_SECRET=""
   if [[ "$CHOICE" == "2" ]]; then
-    REMOTE_URL=$(prompt_default "Remote server_manager URL" "https://manager.${DNS_ROOT}")
+    REMOTE_URL=$(prompt_default "Remote server_manager URL" "https://manager.${PRIMARY_DOMAIN}")
     REMOTE_SECRET=$(prompt_default "Remote server_manager secret" "$(openssl rand -hex 16)")
   fi
 
-  write_env_and_stack "$DNS_ROOT" "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$KEYCLOAK_HOST" "$PDNS_ADMIN_HOST" "$CHOICE" "$REMOTE_URL" "$REMOTE_SECRET"
+  write_env_and_stack "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$CHOICE" "$REMOTE_URL" "$REMOTE_SECRET"
 
   deploy_stack
   setup_metrics_timer
 
   echo
-  log "All set! Verify DNS -> CNAMEs to ${DNS_ROOT} as needed."
+  log "All set! Services are now available:"
   log "Traefik:     https://${TRAEFIK_HOST}"
   log "Portainer:   https://${PORTAINER_HOST}"
-  log "Keycloak:    https://${KEYCLOAK_HOST}"
-  log "DNS-Admin:   https://${PDNS_ADMIN_HOST}"
   echo
-  warn "Remember to point service domains to this host (A/AAAA) or via CNAME to ${DNS_ROOT} (per your plan)."
+  warn "Remember to point service domains to this host (A/AAAA records) in your DNS provider."
+  warn "Primary domain: ${PRIMARY_DOMAIN}"
 }
 
 main "$@"
