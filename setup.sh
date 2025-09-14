@@ -73,7 +73,10 @@ create_dirs() {
   BASE="/mnt/hosting/infrastructure"
   mkdir -p "$BASE/traefik/letsencrypt" \
            "$BASE/traefik/dynamic" \
+           "$BASE/traefik/dynamic/certs" \
            "$BASE/portainer/data" \
+           "$BASE/keycloak/data" \
+           "$BASE/keycloak/postgres" \
            "$BASE/shared" \
            "$BASE/metrics"
   chmod 600 "$BASE/traefik/letsencrypt" || true
@@ -94,6 +97,27 @@ write_env_and_stack() {
   local WANT_LOCAL_SERVER_MANAGER="$4"
   local REMOTE_SERVER_MANAGER_URL="$5"
   local REMOTE_SERVER_MANAGER_SECRET="$6"
+  local CF_DNS_API_TOKEN="$7"
+  local KEYCLOAK_HOST="$8"
+  local CF_ORIGIN_KEY="$9"
+  local CF_ORIGIN_PEM="${10}"
+
+  cat > "$BASE/traefik/dynamic/certs/cf-origin.pem" <<EOF
+$CF_ORIGIN_PEM
+EOF
+  chmod 644 "$BASE/traefik/dynamic/certs/cf-origin.pem"
+
+  cat > "$BASE/traefik/dynamic/certs/cf-origin.key" <<EOF
+$CF_ORIGIN_KEY
+EOF
+  chmod 600 "$BASE/traefik/dynamic/certs/cf-origin.key"
+
+  cat > "$BASE/traefik/dynamic/tls.yml" <<EOF
+tls:
+  certificates:
+    - certFile: /dynamic/certs/cf-origin.pem
+      keyFile: /dynamic/certs/cf-origin.key
+EOF
 
   # Generate docker-compose.yml with inlined values (no .env file)
   cat > "$BASE/docker-compose.yml" <<STACK
@@ -104,6 +128,8 @@ networks:
     external: true
   infra-net:
     external: true
+  keycloak-net:
+    driver: overlay
 
 services:
 
@@ -122,9 +148,12 @@ services:
       - --entrypoints.websecure.address=:443
       - --entrypoints.traefik.address=:8080
       - --api.dashboard=true
-      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      # - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.le.acme.dnschallenge.delaybeforecheck=0
+      - --serversTransport.insecureSkipVerify=false
       - --log.level=INFO
       - --accesslog=true
     ports:
@@ -146,6 +175,8 @@ services:
       - /mnt/hosting/infrastructure/traefik/dynamic:/dynamic
     networks:
       - traefik-net
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
     deploy:
       mode: replicated
       replicas: 1
@@ -158,11 +189,14 @@ services:
         - "traefik.http.routers.traefik.entrypoints=websecure"
         - "traefik.http.routers.traefik.service=api@internal"
         - "traefik.http.routers.traefik.tls=true"
-        - "traefik.http.routers.traefik.tls.certresolver=le"
+        # - "traefik.http.routers.traefik.tls.certresolver=le"
         - "traefik.http.services.traefik.loadbalancer.server.port=8080"
         # - "traefik.http.routers.http-catchall.rule=HostRegexp(\`{host:.+}\`)"
         # - "traefik.http.routers.http-catchall.entrypoints=web"
         # - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+        - "traefik.http.routers.traefik-http.rule=Host(\`${TRAEFIK_HOST}\`)"
+        - "traefik.http.routers.traefik-http.entrypoints=web"
+        - "traefik.http.routers.traefik-http.middlewares=redirect-to-https"
         - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
 
   # ----------------
@@ -190,42 +224,75 @@ services:
         - "traefik.http.routers.port.rule=Host(\`${PORTAINER_HOST}\`)"
         - "traefik.http.routers.port.entrypoints=websecure"
         - "traefik.http.routers.port.tls=true"
-        - "traefik.http.routers.port.tls.certresolver=le"
+        # - "traefik.http.routers.port.tls.certresolver=le"
         - "traefik.http.services.port.loadbalancer.server.port=9000"
         - "traefik.http.routers.port-http.rule=Host(\`${PORTAINER_HOST}\`)"
         - "traefik.http.routers.port-http.entrypoints=web"
         - "traefik.http.routers.port-http.middlewares=port-redirect"
 
   # ----------------
-  # Placeholders (commented out for now)
+  # Keycloak + Postgres
   # ----------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HOSTNAME: ${KEYCLOAK_HOST}
+      KC_HTTP_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    command: ["start"]
+    volumes:
+      - /mnt/hosting/infrastructure/keycloak/data:/opt/keycloak/data
+    depends_on:
+      - keycloak-db
+    networks:
+      - keycloak-net
+      - traefik-net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik-net"
+        - "traefik.http.middlewares.kc-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.kc-redirect.redirectscheme.permanent=true"
+        - "traefik.http.routers.kc.rule=Host(\`${KEYCLOAK_HOST}\`)"
+        - "traefik.http.routers.kc.entrypoints=websecure"
+        - "traefik.http.routers.kc.tls=true"
+        - "traefik.http.routers.kc.tls.certresolver=le"
+        - "traefik.http.services.kc.loadbalancer.server.port=8080"
+        - "traefik.http.routers.kc-http.rule=Host(\`${KEYCLOAK_HOST}\`)"
+        - "traefik.http.routers.kc-http.entrypoints=web"
+        - "traefik.http.routers.kc-http.middlewares=kc-redirect"
 
-  # server_manager:
-  #   image: yourorg/server_manager:stable
-  #   environment:
-  #     BASE_URL: https://${REMOTE_SERVER_MANAGER_URL}
-  #     AUTH_SECRET: ${REMOTE_SERVER_MANAGER_SECRET}
-  #   networks:
-  #     - infra-net
-  #     - traefik-net
-  #   deploy:
-  #     replicas: 1
-  #     placement:
-  #       constraints: [node.role == manager]
-  #   labels:
-  #     - "traefik.enable=false"
+  keycloak-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - /mnt/hosting/infrastructure/keycloak/postgres:/var/lib/postgresql/data
+    networks:
+      - keycloak-net
+    deploy:
+      placement:
+        constraints: [node.role == manager]
 
-  # swarm-connect:
-  #   image: yourorg/swarm-connect:stable
-  #   environment:
-  #     MANAGER_URL: https://${REMOTE_SERVER_MANAGER_URL}
-  #     AUTH_SECRET: ${REMOTE_SERVER_MANAGER_SECRET}
-  #   networks:
-  #     - infra-net
-  #   deploy:
-  #     replicas: 1
-  #     placement:
-  #       constraints: [node.role == manager]
 STACK
 }
 
@@ -364,6 +431,12 @@ main() {
   # Service domain configuration with primary domain defaults
   TRAEFIK_HOST=$(prompt_default "Traefik dashboard domain" "traefik.${PRIMARY_DOMAIN}")
   PORTAINER_HOST=$(prompt_default "Portainer domain" "portainer.${PRIMARY_DOMAIN}")
+  KEYCLOAK_HOST=$(prompt_default "KeyCloak domain" "login.${PRIMARY_DOMAIN}")
+  CF_DNS_API_TOKEN=$(prompt_default "Cloudflare token" "")
+  echo "Paste Cloudflare Origin CA key (PEM format), then Ctrl-D:"
+  CF_ORIGIN_KEY=$(cat)
+  echo "Paste Cloudflare Origin CA cert (PEM format), then Ctrl-D:"
+  CF_ORIGIN_PEM=$(cat)
 
   echo
   echo "=== Server Manager placeholders ==="
@@ -377,15 +450,17 @@ main() {
     REMOTE_SECRET=$(prompt_default "Remote server_manager secret" "$(openssl rand -hex 16)")
   fi
 
-  write_env_and_stack "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$CHOICE" "$REMOTE_URL" "$REMOTE_SECRET"
+  write_env_and_stack "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$CHOICE" "$REMOTE_URL" "$REMOTE_SECRET" "$CF_DNS_API_TOKEN" "$KEYCLOAK_HOST" "$CF_ORIGIN_KEY" "$CF_ORIGIN_PEM"
 
   deploy_stack
   setup_metrics_timer
 
   echo
   log "All set! Services are now available:"
-  log "Traefik:     https://${TRAEFIK_HOST}"
-  log "Portainer:   https://${PORTAINER_HOST}"
+  log "Server Manager:  https://${PRIMARY_DOMAIN}"
+  log "Traefik:         https://${TRAEFIK_HOST}"
+  log "Portainer:       https://${PORTAINER_HOST}"
+  log "Keycloak:        https://${KEYCLOAK_HOST} (admin/admin)"
   echo
   warn "Remember to point service domains to this host (A/AAAA records) in your DNS provider."
   warn "Primary domain: ${PRIMARY_DOMAIN}"
