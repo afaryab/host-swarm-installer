@@ -77,6 +77,8 @@ create_dirs() {
            "$BASE/portainer/data" \
            "$BASE/keycloak/data" \
            "$BASE/keycloak/postgres" \
+           "$BASE/server-manager/app" \
+           "$BASE/server-manager/mysql" \
            "$BASE/shared" \
            "$BASE/metrics"
   chmod 600 "$BASE/traefik/letsencrypt" || true
@@ -86,7 +88,6 @@ create_dirs() {
 
 create_networks() {
   docker network create --driver overlay traefik-net >/dev/null 2>&1 || true
-  docker network create --driver overlay infra-net >/dev/null 2>&1 || true
 }
 
 write_env_and_stack() {
@@ -95,12 +96,13 @@ write_env_and_stack() {
   local TRAEFIK_HOST="$2"
   local PORTAINER_HOST="$3"
   local WANT_LOCAL_SERVER_MANAGER="$4"
-  local REMOTE_SERVER_MANAGER_URL="$5"
-  local REMOTE_SERVER_MANAGER_SECRET="$6"
-  local CF_DNS_API_TOKEN="$7"
-  local KEYCLOAK_HOST="$8"
-  local CF_ORIGIN_KEY="$9"
-  local CF_ORIGIN_PEM="${10}"
+  local SERVER_MANAGER_DOMAIN="$5"
+  local CF_DNS_API_TOKEN="$6"
+  local KEYCLOAK_HOST="$7"
+  local CF_ORIGIN_KEY="$8"
+  local CF_ORIGIN_PEM="$9"
+  local KC_USER="${10}"
+  local KC_PASS="${11}"
 
   cat > "$BASE/traefik/dynamic/certs/cf-origin.pem" <<EOF
 $CF_ORIGIN_PEM
@@ -126,9 +128,9 @@ version: "3.9"
 networks:
   traefik-net:
     external: true
-  infra-net:
-    external: true
   keycloak-net:
+    driver: overlay
+  server-manager-net:
     driver: overlay
 
 services:
@@ -230,6 +232,12 @@ services:
         - "traefik.http.routers.port-http.entrypoints=web"
         - "traefik.http.routers.port-http.middlewares=port-redirect"
 
+STACK
+
+  # Add Keycloak services only if server manager is wanted
+  if [[ "$WANT_LOCAL_SERVER_MANAGER" == "yes" ]]; then
+    cat >> "$BASE/docker-compose.yml" <<KEYCLOAK_STACK
+
   # ----------------
   # Keycloak + Postgres
   # ----------------
@@ -244,8 +252,8 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_USER}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_PASS}
     command: ["start"]
     volumes:
       - /mnt/hosting/infrastructure/keycloak/data:/opt/keycloak/data
@@ -293,7 +301,165 @@ services:
       placement:
         constraints: [node.role == manager]
 
-STACK
+  # ----------------
+  # Server Manager + Mysql
+  # ----------------
+  server-manager:
+    image: ahmadfaryabkokab/host-swarm:0.0.6
+    environment:
+      APP_NAME:Host-Swarm
+      APP_ENV:production
+      APP_DEBUG:false
+      APP_URL:https://${SERVER_MANAGER_DOMAIN}
+      DB_CONNECTION:mysql
+      DB_HOST:server-manager-mysql
+      DB_PORT:3306
+      DB_DATABASE:hostswarm
+      DB_USERNAME:hostswarm
+      DB_PASSWORD:hostswarmpassword
+      BROADCAST_DRIVER:pusher
+      BROADCAST_CONNECTION:pusher
+      QUEUE_CONNECTION:database
+      CACHE_STORE:database
+      REDIS_CLIENT:phpredis
+      REDIS_HOST:server-manager-redis
+      REDIS_PASSWORD:null
+      REDIS_PORT:6379
+      MAIL_MAILER:smtp
+      MAIL_HOST:smtp.mailtrap.io
+      MAIL_PORT:2525
+      MAIL_USERNAME:null
+      MAIL_PASSWORD:null
+      MAIL_ENCRYPTION:null
+      MAIL_FROM_ADDRESS:admin@${SERVER_MANAGER_DOMAIN}
+      MAIL_FROM_NAME:"Host Swarm"
+      GITHUB_CLIENT_ID:null
+      GITHUB_CLIENT_SECRET:null
+      GOOGLE_CLIENT_ID:null
+      GOOGLE_CLIENT_SECRET:null
+      GITLAB_CLIENT_ID:null
+      GITLAB_CLIENT_SECRET:null
+      PADDLE_CLIENT_SIDE_TOKEN:null
+      PADDLE_API_KEY:your-paddle-api-key
+      PADDLE_RETAIN_KEYS:your-paddle-retain-key
+      PADDLE_WEBHOOK_SECRET:your-paddle-webhook-secret
+      PADDLE_SANDBOX:true
+      CLOUDFLARE_EMAIL:null
+      CLOUDFLARE_API_KEY:null
+      CLOUDFLARE_ZONE_ID:null
+      CLOUDFLARE_TARGET_IP:null
+      STRIPE_KEY:null
+      STRIPE_SECRET:null
+      STRIPE_WEBHOOK_SECRET:null
+    command: ["start"]
+    volumes:
+      - /mnt/hosting/infrastructure/keycloak/data:/opt/keycloak/data
+    depends_on:
+      - keycloak-db
+    networks:
+      - server-manager-net
+      - traefik-net
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik-net"
+        - "traefik.http.middlewares.server-manager-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.server-manager-redirect.redirectscheme.permanent=true"
+        - "traefik.http.routers.server-manager.rule=Host(\`${SERVER_MANAGER_DOMAIN}\`)"
+        - "traefik.http.routers.server-manager.entrypoints=websecure"
+        - "traefik.http.routers.server-manager.tls=true"
+        - "traefik.http.routers.server-manager.tls.certresolver=le"
+        - "traefik.http.services.server-manager.loadbalancer.server.port=8080"
+        - "traefik.http.routers.server-manager-http.rule=Host(\`${SERVER_MANAGER_DOMAIN}\`)"
+        - "traefik.http.routers.server-manager-http.entrypoints=web"
+        - "traefik.http.routers.server-manager-http.middlewares=server-manager-redirect"
+
+  server-manager-mysql:
+    image: ahmadfaryabkokab/mysql8:0.2.0
+    init: true
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: hostswarm
+      MYSQL_USER: hostswarm
+      MYSQL_PASSWORD: hostswarmpassword
+      MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+      BACKUP_CRON: "0 * * * *"          # Every hour at minute 0
+      USAGE_CRON: "*/30 * * * *"          # Every half hour
+      PRUNE_CRON: "0 4 * * 0"           # Weekly cleanup on Sunday at 4 AM
+      RETAIN_DAYS: 1                    # Keep 1 day of backups
+      RETAIN_COUNT: 6                   # Keep max 6 backups
+    volumes:
+      - /mnt/hosting/infrastructure/server-manager/mysql:/var/lib/mysql
+    networks:
+      - server-manager-net
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+  server-manager-redis:
+    image: redis:7-alpine
+    networks:
+      - server-manager-net
+    restart: unless-stopped
+
+  
+  server-manager-soketi:
+    image: 'quay.io/soketi/soketi:1.4-16-alpine'
+    environment:
+      SOKETI_DEBUG: '1'
+      SOKETI_METRICS_SERVER_PORT: '9601'
+      SOKETI_DEFAULT_APP_ID: 'app-id'
+      SOKETI_DEFAULT_APP_KEY: 'app-key'
+      SOKETI_DEFAULT_APP_SECRET: 'app-secret'
+      SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES: 'true'
+      SOKETI_DEFAULT_APP_ENABLED: 'true'
+      SOKETI_DEFAULT_APP_MAX_CONNECTIONS: '100'
+      SOKETI_DEFAULT_APP_MAX_BACKEND_EVENTS_PER_SEC: '100'
+      SOKETI_DEFAULT_APP_MAX_CLIENT_EVENTS_PER_SEC: '100'
+      SOKETI_DEFAULT_APP_MAX_READ_REQ_PER_SEC: '100'
+      # Allow all origins for development
+      SOKETI_CORS_ALLOWED_ORIGINS: '*'
+      SOKETI_CORS_ALLOWED_HEADERS: '*'
+      SOKETI_CORS_ALLOWED_METHODS: '*'
+    networks:
+      - server-manager-net
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=traefik-net"
+
+        - "traefik.http.middlewares.ws-server-manager-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.ws-server-manager-redirect.redirectscheme.permanent=true"
+        - "traefik.http.routers.ws-server-manager.rule=Host(\`ws-${SERVER_MANAGER_DOMAIN}\`)"
+        - "traefik.http.routers.ws-server-manager.entrypoints=websecure"
+        - "traefik.http.routers.ws-server-manager.tls=true"
+        - "traefik.http.routers.ws-server-manager.tls.certresolver=le"
+        - "traefik.http.services.ws-server-manager.loadbalancer.server.port=6001"
+        - "traefik.http.routers.ws-server-manager-http.rule=Host(\`ws-${SERVER_MANAGER_DOMAIN}\`)"
+        - "traefik.http.routers.ws-server-manager-http.entrypoints=web"
+        - "traefik.http.routers.ws-server-manager-http.middlewares=ws-server-manager-redirect"
+
+
+        - "traefik.http.middlewares.wsm-server-manager-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.wsm-server-manager-redirect.redirectscheme.permanent=true"
+        - "traefik.http.routers.wsm-server-manager.rule=Host(\`wsm-${SERVER_MANAGER_DOMAIN}\`)"
+        - "traefik.http.routers.wsm-server-manager.entrypoints=websecure"
+        - "traefik.http.routers.wsm-server-manager.tls=true"
+        - "traefik.http.routers.wsm-server-manager.tls.certresolver=le"
+        - "traefik.http.services.wsm-server-manager.loadbalancer.server.port=9601"
+        - "traefik.http.routers.wsm-server-manager-http.rule=Host(\`ws-${SERVER_MANAGER_DOMAIN}\`)"
+        - "traefik.http.routers.wsm-server-manager-http.entrypoints=web"
+        - "traefik.http.routers.wsm-server-manager-http.middlewares=wsm-server-manager-redirect"
+
+KEYCLOAK_STACK
+  fi
 }
 
 deploy_stack() {
@@ -432,6 +598,8 @@ main() {
   TRAEFIK_HOST=$(prompt_default "Traefik dashboard domain" "traefik.${PRIMARY_DOMAIN}")
   PORTAINER_HOST=$(prompt_default "Portainer domain" "portainer.${PRIMARY_DOMAIN}")
   KEYCLOAK_HOST=$(prompt_default "KeyCloak domain" "login.${PRIMARY_DOMAIN}")
+  KEYCLOAK_ADMIN=$(prompt_default "KeyCloak admin" "admin")
+  KEYCLOAK_PASSWORD=$(prompt_default "KeyCloak password" "admin")
   CF_DNS_API_TOKEN=$(prompt_default "Cloudflare token" "")
   echo "Paste Cloudflare Origin CA key (PEM format), then Ctrl-D:"
   CF_ORIGIN_KEY=$(cat)
@@ -440,27 +608,27 @@ main() {
 
   echo
   echo "=== Server Manager placeholders ==="
-  echo "Do you want to create a placeholder service here, or reference an existing remote one?"
-  echo "  1) Create local placeholder (commented, ready to enable)"
-  echo "  2) Use existing remote (commented, store URL/secret placeholders)"
-  CHOICE=$(prompt_default "Choose 1 or 2" "1")
-  REMOTE_URL=""; REMOTE_SECRET=""
-  if [[ "$CHOICE" == "2" ]]; then
-    REMOTE_URL=$(prompt_default "Remote server_manager URL" "https://manager.${PRIMARY_DOMAIN}")
-    REMOTE_SECRET=$(prompt_default "Remote server_manager secret" "$(openssl rand -hex 16)")
+  echo "Do you want to setup server manager?"
+  CHOICE=$(prompt_default "Choose yes or no" "yes")
+  SERVER_MANAGER_DOMAIN="";
+  if [[ "$CHOICE" == "yes" ]]; then
+    SERVER_MANAGER_DOMAIN=$(prompt_default "Server Manager domain" "manager.${PRIMARY_DOMAIN}")
   fi
 
-  write_env_and_stack "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$CHOICE" "$REMOTE_URL" "$REMOTE_SECRET" "$CF_DNS_API_TOKEN" "$KEYCLOAK_HOST" "$CF_ORIGIN_KEY" "$CF_ORIGIN_PEM"
+  write_env_and_stack "$ACME_EMAIL" "$TRAEFIK_HOST" "$PORTAINER_HOST" "$CHOICE" "$SERVER_MANAGER_DOMAIN" "$CF_DNS_API_TOKEN" "$KEYCLOAK_HOST" "$CF_ORIGIN_KEY" "$CF_ORIGIN_PEM" "$KEYCLOAK_ADMIN" "$KEYCLOAK_PASSWORD"
 
   deploy_stack
   setup_metrics_timer
 
   echo
   log "All set! Services are now available:"
-  log "Server Manager:  https://${PRIMARY_DOMAIN}"
+  log "Primary Domain:  https://${PRIMARY_DOMAIN}"
   log "Traefik:         https://${TRAEFIK_HOST}"
   log "Portainer:       https://${PORTAINER_HOST}"
-  log "Keycloak:        https://${KEYCLOAK_HOST} (admin/admin)"
+  if [[ "$CHOICE" == "yes" ]]; then
+    log "Keycloak:        https://${KEYCLOAK_HOST} (${KEYCLOAK_ADMIN}/${KEYCLOAK_PASSWORD})"
+    log "Server Manager:  https://${SERVER_MANAGER_DOMAIN} (setup wizard on first visit)"
+  fi
   echo
   warn "Remember to point service domains to this host (A/AAAA records) in your DNS provider."
   warn "Primary domain: ${PRIMARY_DOMAIN}"
