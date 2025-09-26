@@ -574,6 +574,10 @@ main() {
       2)
         log "Stopping and removing existing stack..."
         docker stack rm infrastructure || true
+        log "Removing old Docker networks..."
+        docker network rm traefik-net keycloak-net server-manager-net >/dev/null 2>&1 || true
+        log "Pruning all unused Docker resources..."
+        docker system prune -af --volumes
         sleep 5
         log "Removing old files..."
         rm -rf "$BASE"/*
