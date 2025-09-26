@@ -307,50 +307,50 @@ STACK
   server-manager:
     image: ahmadfaryabkokab/host-swarm:0.0.6
     environment:
-      APP_NAME:Host-Swarm
-      APP_ENV:production
-      APP_DEBUG:false
-      APP_URL:https://${SERVER_MANAGER_DOMAIN}
-      DB_CONNECTION:mysql
-      DB_HOST:server-manager-mysql
-      DB_PORT:3306
-      DB_DATABASE:hostswarm
-      DB_USERNAME:hostswarm
-      DB_PASSWORD:hostswarmpassword
-      BROADCAST_DRIVER:pusher
-      BROADCAST_CONNECTION:pusher
-      QUEUE_CONNECTION:database
-      CACHE_STORE:database
-      REDIS_CLIENT:phpredis
-      REDIS_HOST:server-manager-redis
-      REDIS_PASSWORD:null
-      REDIS_PORT:6379
-      MAIL_MAILER:smtp
-      MAIL_HOST:smtp.mailtrap.io
-      MAIL_PORT:2525
-      MAIL_USERNAME:null
-      MAIL_PASSWORD:null
-      MAIL_ENCRYPTION:null
-      MAIL_FROM_ADDRESS:admin@${SERVER_MANAGER_DOMAIN}
-      MAIL_FROM_NAME:"Host Swarm"
-      GITHUB_CLIENT_ID:null
-      GITHUB_CLIENT_SECRET:null
-      GOOGLE_CLIENT_ID:null
-      GOOGLE_CLIENT_SECRET:null
-      GITLAB_CLIENT_ID:null
-      GITLAB_CLIENT_SECRET:null
-      PADDLE_CLIENT_SIDE_TOKEN:null
-      PADDLE_API_KEY:your-paddle-api-key
-      PADDLE_RETAIN_KEYS:your-paddle-retain-key
-      PADDLE_WEBHOOK_SECRET:your-paddle-webhook-secret
-      PADDLE_SANDBOX:true
-      CLOUDFLARE_EMAIL:null
-      CLOUDFLARE_API_KEY:null
-      CLOUDFLARE_ZONE_ID:null
-      CLOUDFLARE_TARGET_IP:null
-      STRIPE_KEY:null
-      STRIPE_SECRET:null
-      STRIPE_WEBHOOK_SECRET:null
+      - APP_NAME=Host-Swarm
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=https://${SERVER_MANAGER_DOMAIN}
+      - DB_CONNECTION=mysql
+      - DB_HOST=server-manager-mysql
+      - DB_PORT=3306
+      - DB_DATABASE=hostswarm
+      - DB_USERNAME=hostswarm
+      - DB_PASSWORD=hostswarmpassword
+      - BROADCAST_DRIVER=pusher
+      - BROADCAST_CONNECTION=pusher
+      - QUEUE_CONNECTION=database
+      - CACHE_STORE=database
+      - REDIS_CLIENT=phpredis
+      - REDIS_HOST=server-manager-redis
+      - REDIS_PASSWORD=null
+      - REDIS_PORT=6379
+      - MAIL_MAILER=smtp
+      - MAIL_HOST=smtp.mailtrap.io
+      - MAIL_PORT=2525
+      - MAIL_USERNAME=null
+      - MAIL_PASSWORD=null
+      - MAIL_ENCRYPTION=null
+      - MAIL_FROM_ADDRESS=admin@${SERVER_MANAGER_DOMAIN}
+      - MAIL_FROM_NAME=Host Swarm
+      - GITHUB_CLIENT_ID=null
+      - GITHUB_CLIENT_SECRET=null
+      - GOOGLE_CLIENT_ID=null
+      - GOOGLE_CLIENT_SECRET=null
+      - GITLAB_CLIENT_ID=null
+      - GITLAB_CLIENT_SECRET=null
+      - PADDLE_CLIENT_SIDE_TOKEN=null
+      - PADDLE_API_KEY=your-paddle-api-key
+      - PADDLE_RETAIN_KEYS=your-paddle-retain-key
+      - PADDLE_WEBHOOK_SECRET=your-paddle-webhook-secret
+      - PADDLE_SANDBOX=true
+      - CLOUDFLARE_EMAIL=null
+      - CLOUDFLARE_API_KEY=null
+      - CLOUDFLARE_ZONE_ID=null
+      - CLOUDFLARE_TARGET_IP=null
+      - STRIPE_KEY=null
+      - STRIPE_SECRET=null
+      - STRIPE_WEBHOOK_SECRET=null
     command: ["start"]
     volumes:
       - /mnt/hosting/infrastructure/keycloak/data:/opt/keycloak/data
