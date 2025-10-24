@@ -5,7 +5,13 @@ set -euo pipefail
 # Host-Swarm Infrastructure Installer
 # =========================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Handle both local execution and piped execution from curl
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+  SCRIPT_DIR="/tmp/host-swarm-installer"
+fi
+
 BASE_DIR="/mnt/hosting/infrastructure"
 PROGRESS_FILE="$BASE_DIR/.install_progress.json"
 MODULES_DIR="$SCRIPT_DIR/modules"
