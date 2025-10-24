@@ -132,18 +132,18 @@ EOF
 
 create_keycloak_compose() {
   log "Creating Keycloak docker-compose.yml..."
-  cat > "$BASE_DIR/docker-compose.yml" <<'EOF'
+  cat > "$BASE_DIR/docker-compose.yml" <<EOF
 version: '3.8'
 
 services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=\${POSTGRES_DB}
+      - POSTGRES_USER=\${POSTGRES_USER}
+      - POSTGRES_PASSWORD=\${POSTGRES_PASSWORD}
     volumes:
-      - ${PWD}/postgres:/var/lib/postgresql/data
+      - ./postgres:/var/lib/postgresql/data
     networks:
       - keycloak-net
     deploy:
@@ -153,7 +153,7 @@ services:
         constraints:
           - node.role == manager
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U \${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -162,24 +162,24 @@ services:
     image: ahmadfaryabkokab/keycloaktailwind:0.0.5
     command: ["start-dev", "--http-enabled=true", "--hostname-strict=false", "--hostname-strict-https=false"]
     environment:
-      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}
-      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - KEYCLOAK_ADMIN=\${KEYCLOAK_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=\${KEYCLOAK_ADMIN_PASSWORD}
       - KC_DB=postgres
-      - KC_DB_URL_HOST=${KC_DB_URL}
-      - KC_DB_URL_DATABASE=${KC_DB}
-      - KC_DB_USERNAME=${KC_DB_USERNAME}
-      - KC_DB_PASSWORD=${KC_DB_PASSWORD}
-        KC_HOSTNAME_STRICT: "false"
-        KC_HOSTNAME_STRICT_HTTPS: "true"
-        KC_HTTP_ENABLED: "true"
-        KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
-        KC_METRICS_ENABLED: "true"
-        KC_PROXY_HEADERS: xforwarded
+      - KC_DB_URL_HOST=\${KC_DB_URL}
+      - KC_DB_URL_DATABASE=\${KC_DB}
+      - KC_DB_USERNAME=\${KC_DB_USERNAME}
+      - KC_DB_PASSWORD=\${KC_DB_PASSWORD}
+      - KC_HOSTNAME_STRICT: "false"
+      - KC_HOSTNAME_STRICT_HTTPS: "true"
+      - KC_HTTP_ENABLED: "true"
+      - KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      - KC_METRICS_ENABLED: "true"
+      - KC_PROXY_HEADERS: xforwarded
       - KC_PROXY=edge
-      - KC_HOSTNAME=${KC_HOSTNAME}
+      - KC_HOSTNAME=\${KC_HOSTNAME}
       - KC_HEALTH_ENABLED=true
     volumes:
-      - ${PWD}/data:/opt/keycloak/data
+      - ./data:/opt/keycloak/data
     networks:
       - traefik-net
       - keycloak-net
@@ -197,13 +197,13 @@ services:
         - "traefik.http.middlewares.kc-redirect.redirectscheme.scheme=https"
         - "traefik.http.middlewares.kc-redirect.redirectscheme.permanent=true"
 
-        - "traefik.http.routers.kc.rule=Host(`${KEYCLOAK_DOMAIN}`)"
+        - "traefik.http.routers.kc.rule=Host(\\\`${KEYCLOAK_DOMAIN}\\\`)"
         - "traefik.http.routers.kc.entrypoints=websecure"
         - "traefik.http.routers.kc.tls=true"
         - "traefik.http.routers.kc.service=kc"
         #- "traefik.http.routers.kc.tls.certresolver=le"
         #- "traefik.http.services.kc.loadbalancer.server.port=80"
-        - "traefik.http.routers.kc-http.rule=Host(`${KEYCLOAK_DOMAIN}`)"
+        - "traefik.http.routers.kc-http.rule=Host(\\\`${KEYCLOAK_DOMAIN}\\\`)"
         - "traefik.http.routers.kc-http.entrypoints=web"
         - "traefik.http.routers.kc-http.middlewares=kc-redirect"
 

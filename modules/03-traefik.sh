@@ -102,14 +102,14 @@ services:
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
-      - --entrypoints.traefik.address=:8080
       - --api.dashboard=true
+      - --api.insecure=true
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.le.acme.dnschallenge=true"
+      - --certificatesresolvers.le.acme.dnschallenge=true
       - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
       - --certificatesresolvers.le.acme.dnschallenge.delaybeforecheck=0
-      - --certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53"
+      - --certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
       - --serversTransport.insecureSkipVerify=false
       - --log.level=INFO
       - --accesslog=true

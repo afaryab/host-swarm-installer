@@ -271,7 +271,7 @@ create_server_manager_compose() {
   local domain="$1"
   
   log "Creating Server Manager docker-compose.yml..."
-  cat > "$BASE_DIR/docker-compose.yml" <<'EOF'
+  cat > "$BASE_DIR/docker-compose.yml" <<EOF
 version: '3.8'
 
 services:
@@ -282,15 +282,15 @@ services:
       - APP_ENV=production
       - APP_DEBUG=false
       - DB_CONNECTION=mysql
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_DATABASE=${DB_DATABASE}
-      - DB_USERNAME=${DB_USERNAME}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - APP_URL=https://${DOMAIN}
+      - DB_HOST=\${DB_HOST}
+      - DB_PORT=\${DB_PORT}
+      - DB_DATABASE=\${DB_DATABASE}
+      - DB_USERNAME=\${DB_USERNAME}
+      - DB_PASSWORD=\${DB_PASSWORD}
+      - APP_URL=https://${domain}
     volumes:
       - ./app:/app/storage
-      - ${SSH_PRIVATE_KEY_PATH}:/app/ssh/id_ed25519:ro
+      - /root/.ssh/server_manager_key:/app/ssh/id_rsa:ro
     networks:
       - traefik-net
       - server-manager-net
@@ -305,11 +305,11 @@ services:
         - "traefik.http.middlewares.server-manager-redirect.redirectscheme.scheme=https"
         - "traefik.http.middlewares.server-manager-redirect.redirectscheme.permanent=true"
 
-        - "traefik.http.routers.server-manager.rule=Host(`${DOMAIN}`)"
+        - "traefik.http.routers.server-manager.rule=Host(\\\`${domain}\\\`)"
         - "traefik.http.routers.server-manager.entrypoints=websecure"
         - "traefik.http.routers.server-manager.tls=true"
         - "traefik.http.routers.server-manager.service=server-manager"
-        - "traefik.http.routers.server-manager-http.rule=Host(`${DOMAIN}`)"
+        - "traefik.http.routers.server-manager-http.rule=Host(\\\`${domain}\\\`)"
         - "traefik.http.routers.server-manager-http.entrypoints=web"
         - "traefik.http.routers.server-manager-http.service=server-manager-redirect"
         
@@ -320,17 +320,17 @@ services:
     image: ahmadfaryabkokab/mysql8:0.2.0
     init: true
     environment:
-      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}
-      - MYSQL_DATABASE=${DB_DATABASE}
-      - MYSQL_USER=${DB_USERNAME}
-      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=\${DB_PASSWORD}
+      - MYSQL_DATABASE=\${DB_DATABASE}
+      - MYSQL_USER=\${DB_USERNAME}
+      - MYSQL_PASSWORD=\${DB_PASSWORD}
       - BACKUP_CRON="0 * * * *"          # Every hour at minute 0
       - USAGE_CRON="*/30 * * * *"          # Every half hour
       - PRUNE_CRON="0 4 * * 0"           # Weekly cleanup on Sunday at 4 AM
       - RETAIN_DAYS=1                    # Keep 1 day of backups
       - RETAIN_COUNT=6                   # Keep max 6 backups
     volumes:
-      - ${PWD}/mysql:/var/lib/mysql
+      - ./mysql:/var/lib/mysql
     networks:
       - server-manager-net
     deploy:
