@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 # =========================
 # Host-Swarm Infrastructure Installer
 # =========================
 
 # Handle both local execution and piped execution from curl
-if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+# Default to temp directory (for curl pipe execution)
+SCRIPT_DIR="/tmp/host-swarm-installer"
+
+# Override with actual script directory if running locally
+if [[ -n "${BASH_SOURCE[0]:-}" ]] && [[ "${BASH_SOURCE[0]}" != "/dev/fd/"* ]]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-else
-  SCRIPT_DIR="/tmp/host-swarm-installer"
 fi
+
+# Now enable strict mode for unset variables
+set -u
 
 BASE_DIR="/mnt/hosting/infrastructure"
 PROGRESS_FILE="$BASE_DIR/.install_progress.json"
