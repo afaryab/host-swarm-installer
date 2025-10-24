@@ -57,34 +57,7 @@ ask_portainer_installation() {
   done
 }
 
-ask_portainer_exposure() {
-  echo
-  info "How do you want to expose Portainer?"
-  echo "  1) Public (with domain via Traefik - HTTPS)"
-  echo "  2) Local (expose port 9000 directly)"
-  echo
-  
-  local choice
-  while true; do
-    read -rp "Enter your choice [1-2]: " choice
-    case "$choice" in
-      1)
-        echo "public"
-        return
-        ;;
-      2)
-        echo "local"
-        return
-        ;;
-      *)
-        warn "Invalid choice. Please enter 1 or 2."
-        ;;
-    esac
-  done
-}
-
-create_portainer_compose_public() {
-  local domain="$1"
+create_portainer_compose() {
   
   log "Creating Portainer docker-compose.yml for public access..."
   cat > "$BASE_DIR/docker-compose.yml" <<EOF
@@ -96,6 +69,8 @@ services:
     command: -H tcp://tasks.agent:9001 --tlsskipverify
     volumes:
       - ${PWD}/data:/data
+    ports:
+      - "9000:9000"
     networks:
       - traefik-net
       - portainer-agent-net
@@ -105,12 +80,6 @@ services:
       placement:
         constraints:
           - node.role == manager
-      labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.portainer.rule=Host(\`${domain}\`)"
-        - "traefik.http.routers.portainer.entrypoints=websecure"
-        - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
-        - "traefik.http.services.portainer.loadbalancer.server.port=9000"
 
   agent:
     image: portainer/agent:latest
@@ -136,54 +105,7 @@ networks:
 EOF
   
   log "docker-compose.yml created: $BASE_DIR/docker-compose.yml"
-  info "Portainer will be accessible at: https://${domain}"
-}
-
-create_portainer_compose_local() {
-  log "Creating Portainer docker-compose.yml for local access..."
-  cat > "$BASE_DIR/docker-compose.yml" <<'EOF'
-version: '3.8'
-
-services:
-  portainer:
-    image: portainer/portainer-ce:latest
-    command: -H tcp://tasks.agent:9001 --tlsskipverify
-    ports:
-      - "9000:9000"
-    volumes:
-      - ${PWD}/data:/data
-    networks:
-      - portainer-agent-net
-    deploy:
-      mode: replicated
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
-
-  agent:
-    image: portainer/agent:latest
-    environment:
-      AGENT_CLUSTER_ADDR: tasks.agent
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /var/lib/docker/volumes:/var/lib/docker/volumes
-    networks:
-      - portainer-agent-net
-    deploy:
-      mode: global
-      placement:
-        constraints:
-          - node.platform.os == linux
-
-networks:
-  portainer-agent-net:
-    driver: overlay
-    attachable: true
-EOF
-  
-  log "docker-compose.yml created: $BASE_DIR/docker-compose.yml"
-  info "Portainer will be accessible at: http://<server-ip>:9000"
+  info "Portainer will be accessible at: IP:9000"
 }
 
 deploy_portainer() {
@@ -230,17 +152,7 @@ main() {
   
   create_portainer_directories
   
-  local exposure_type
-  exposure_type=$(ask_portainer_exposure)
-  
-  if [[ "$exposure_type" == "public" ]]; then
-    echo
-    local domain
-    domain=$(prompt_required "Enter domain for Portainer (e.g., portainer.example.com)")
-    create_portainer_compose_public "$domain"
-  else
-    create_portainer_compose_local
-  fi
+  create_portainer_compose
   
   deploy_portainer
   save_portainer_choice "true"

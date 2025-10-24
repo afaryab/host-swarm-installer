@@ -281,8 +281,12 @@ version: '3.8'
 
 services:
   app:
-    image: server-manager/app:latest  # Replace with actual image
+    image: ahmadfaryabkokab/host-swarm:latest
     environment:
+      - APP_NAME="Host Swarm"
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_CONNECTION=mysql
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
       - DB_DATABASE=${DB_DATABASE}
@@ -308,12 +312,18 @@ services:
       - mysql
 
   mysql:
-    image: mysql:8.0
+    image: ahmadfaryabkokab/mysql8:0.2.0
+    init: true
     environment:
       - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}
       - MYSQL_DATABASE=${DB_DATABASE}
       - MYSQL_USER=${DB_USERNAME}
       - MYSQL_PASSWORD=${DB_PASSWORD}
+      - BACKUP_CRON="0 * * * *"          # Every hour at minute 0
+      - USAGE_CRON="*/30 * * * *"          # Every half hour
+      - PRUNE_CRON="0 4 * * 0"           # Weekly cleanup on Sunday at 4 AM
+      - RETAIN_DAYS=1                    # Keep 1 day of backups
+      - RETAIN_COUNT=6                   # Keep max 6 backups
     volumes:
       - ${PWD}/mysql:/var/lib/mysql
     networks:
