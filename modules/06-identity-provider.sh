@@ -159,19 +159,24 @@ services:
       retries: 5
 
   keycloak:
-    image: quay.io/keycloak/keycloak:latest
-    command: start
+    image: ahmadfaryabkokab/keycloaktailwind:0.0.5
+    command: ["start-dev", "--http-enabled=true", "--hostname-strict=false", "--hostname-strict-https=false"]
     environment:
       - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}
       - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
-      - KC_DB=${KC_DB}
-      - KC_DB_URL=${KC_DB_URL}
+      - KC_DB=postgres
+      - KC_DB_URL_HOST=${KC_DB_URL}
+      - KC_DB_URL_DATABASE=${KC_DB}
       - KC_DB_USERNAME=${KC_DB_USERNAME}
       - KC_DB_PASSWORD=${KC_DB_PASSWORD}
-      - KC_PROXY=${KC_PROXY}
+        KC_HOSTNAME_STRICT: "false"
+        KC_HOSTNAME_STRICT_HTTPS: "true"
+        KC_HTTP_ENABLED: "true"
+        KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+        KC_METRICS_ENABLED: "true"
+        KC_PROXY_HEADERS: xforwarded
+      - KC_PROXY=edge
       - KC_HOSTNAME=${KC_HOSTNAME}
-      - KC_HOSTNAME_STRICT=${KC_HOSTNAME_STRICT}
-      - KC_HTTP_ENABLED=true
       - KC_HEALTH_ENABLED=true
     volumes:
       - ${PWD}/data:/opt/keycloak/data
@@ -186,10 +191,22 @@ services:
           - node.role == manager
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.keycloak.rule=Host(`${KEYCLOAK_DOMAIN}`)"
-        - "traefik.http.routers.keycloak.entrypoints=websecure"
-        - "traefik.http.routers.keycloak.tls.certresolver=letsencrypt"
-        - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+        - "traefik.swarm.network=traefik-net"
+        - "traefik.http.services.kc.loadbalancer.server.port=8080"
+
+        - "traefik.http.middlewares.kc-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.kc-redirect.redirectscheme.permanent=true"
+
+        - "traefik.http.routers.kc.rule=Host(`${KEYCLOAK_DOMAIN}`)"
+        - "traefik.http.routers.kc.entrypoints=websecure"
+        - "traefik.http.routers.kc.tls=true"
+        - "traefik.http.routers.kc.service=kc"
+        #- "traefik.http.routers.kc.tls.certresolver=le"
+        #- "traefik.http.services.kc.loadbalancer.server.port=80"
+        - "traefik.http.routers.kc-http.rule=Host(`${KEYCLOAK_DOMAIN}`)"
+        - "traefik.http.routers.kc-http.entrypoints=web"
+        - "traefik.http.routers.kc-http.middlewares=kc-redirect"
+
     depends_on:
       - postgres
     healthcheck:

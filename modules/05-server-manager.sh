@@ -82,15 +82,10 @@ ask_server_manager_installation() {
 }
 
 ask_server_manager_mode() {
-  echo
-  info "Server Manager Mode:"
-  echo "  1) Create new Server Manager (this will be the central server)"
-  echo "  2) Connect to existing Server Manager (this server will be managed)"
-  echo
   
   local choice
   while true; do
-    read -rp "Enter your choice [1-2]: " choice
+    read -rp "Enter your choice [1:create-2:connect]: " choice
     case "$choice" in
       1)
         echo "create"
@@ -172,7 +167,7 @@ connect_to_existing_server_manager() {
   echo
   
   local manager_url
-  manager_url=$(prompt_required "Enter Server Manager URL (e.g., http://203.99.177.18:8080 or https://manager.example.com)")
+  manager_url=$(prompt_required "Enter Server Manager URL (e.g. https://manager.example.com)")
   
   # Remove trailing slash if present
   manager_url="${manager_url%/}"
@@ -304,10 +299,20 @@ services:
       replicas: 1
       labels:
         - "traefik.enable=true"
+        - "traefik.swarm.network=traefik-net"
+        - "traefik.http.services.server-manager.loadbalancer.server.port=80"
+
+        - "traefik.http.middlewares.server-manager-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.server-manager-redirect.redirectscheme.permanent=true"
+
         - "traefik.http.routers.server-manager.rule=Host(`${DOMAIN}`)"
         - "traefik.http.routers.server-manager.entrypoints=websecure"
-        - "traefik.http.routers.server-manager.tls.certresolver=letsencrypt"
-        - "traefik.http.services.server-manager.loadbalancer.server.port=80"
+        - "traefik.http.routers.server-manager.tls=true"
+        - "traefik.http.routers.server-manager.service=server-manager"
+        - "traefik.http.routers.server-manager-http.rule=Host(`${DOMAIN}`)"
+        - "traefik.http.routers.server-manager-http.entrypoints=web"
+        - "traefik.http.routers.server-manager-http.service=server-manager-redirect"
+        
     depends_on:
       - mysql
 
@@ -334,7 +339,14 @@ services:
       placement:
         constraints:
           - node.role == manager
-
+  redis:
+    image: redis:7-alpine
+    networks:
+      - server-manager-net
+    deploy:
+      restart_policy:
+        condition: any
+        
 networks:
   traefik-net:
     external: true
@@ -402,9 +414,16 @@ main() {
   
   create_directories
   
+  echo
+  info "Server Manager Mode:"
+  echo "  1) Create new Server Manager (this will be the central server)"
+  echo "  2) Connect to existing Server Manager (this server will be managed)"
+  echo
+  
+
   local mode
   mode=$(ask_server_manager_mode)
-  
+  log "Selected mode: $mode"
   if [[ "$mode" == "create" ]]; then
     create_server_manager
   else
