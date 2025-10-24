@@ -1,0 +1,546 @@
+# Host-Swarm Infrastructure Installer# Host-Swarm Infrastructure Installer
+
+
+
+A modular, automated installer for setting up complete Docker Swarm infrastructure with:A modular installation system for deploying Docker Swarm infrastructure with Traefik, Portainer, Keycloak, and Server Manager.
+
+- **Docker Engine** - Container runtime
+
+- **Docker Swarm** - Container orchestration## Features
+
+- **Traefik** - Reverse proxy with automatic SSL via Let's Encrypt
+
+- **Portainer** - Web-based Docker management UI (optional)- ✅ **Modular Installation**: Each component is installed separately via independent scripts
+
+- **Server Manager** - Centralized multi-server management (optional)- 📊 **Progress Tracking**: Installation progress is saved and can be resumed if interrupted
+
+- **Keycloak** - Identity provider and SSO (optional)- 🔄 **Resume Capability**: Continue from where you left off if installation fails
+
+- 🎯 **Selective Reinstall**: Redo specific sections without reinstalling everything
+
+## ✨ Key Features- 📝 **Just-in-Time Configuration**: Variables are collected only when needed for each module
+
+- 🌐 **Remote Execution**: Modules can be executed via curl from GitHub or locally
+
+- **🎯 Modular Design** - 6 independent modules that can be run separately
+
+- **📊 Progress Tracking** - Resume installation from where you left off## Quick Start
+
+- **🔄 Interactive** - Collects configuration per module, not all at once
+
+- **🏗️ Organized Structure** - Each service in its own directory with docker-compose.yml### One-Line Installation
+
+- **🔒 Automatic SSL** - Let's Encrypt certificates via Cloudflare DNS challenge
+
+- **🌐 Multi-Server** - Support for creating or joining swarm clusters```bash
+
+- **🔑 SSH Key Management** - Automatic generation and exchange for server managementcurl -fsSL https://raw.githubusercontent.com/afaryab/host-swarm-installer/main/setup.sh | sudo bash
+
+- **↩️ Redo Capability** - Redo specific modules or entire installation```
+
+
+
+## 📋 Prerequisites### Local Installation
+
+
+
+- Ubuntu/Debian server (20.04+ recommended)```bash
+
+- Root or sudo accessgit clone https://github.com/afaryab/host-swarm-installer.git
+
+- Domain name with DNS managed by Cloudflarecd host-swarm-installer
+
+- Cloudflare API token with DNS edit permissionssudo bash setup.sh
+
+```
+
+## 🚀 Quick Start
+
+## Installation Modules
+
+```bash
+
+# Clone the repositoryThe installation is broken into the following modules:
+
+git clone https://github.com/afaryab/host-swarm-installer.git
+
+cd host-swarm-installer1. **Docker Engine** (`01-docker.sh`) - Installs Docker CE and required tools
+
+2. **Docker Swarm** (`02-swarm.sh`) - Initializes Docker Swarm mode
+
+# Make scripts executable3. **Directories & Networks** (`03-directories.sh`) - Creates directory structure and overlay networks
+
+chmod +x setup.sh modules/*.sh4. **Traefik & Portainer** (`04-traefik.sh`) - Deploys reverse proxy and container management
+
+5. **Keycloak & Server Manager** (`05-keycloak.sh`) - Optional identity provider and management interface
+
+# Run the installer6. **Metrics Collection** (`06-metrics.sh`) - Sets up daily usage metrics collection
+
+sudo ./setup.sh
+
+```## Progress Tracking
+
+
+
+## 📦 Installation ModulesInstallation progress is stored in `/mnt/hosting/infrastructure/.install_progress.json`:
+
+
+
+The installer is broken into 6 sequential modules:```json
+
+{
+
+### 1️⃣ Module 01: Docker Validation and Installation  "started_at": "2025-10-23T10:30:00Z",
+
+- Validates Docker installation  "completed": false,
+
+- Installs Docker Engine if missing  "modules": {
+
+- No configuration needed (automatic)    "01-docker": {
+
+      "status": "completed",
+
+### 2️⃣ Module 02: Docker Swarm Setup      "timestamp": "2025-10-23T10:31:00Z"
+
+- **Option 1**: Initialize new swarm (manager node)    },
+
+- **Option 2**: Join existing swarm (worker node)    "02-swarm": {
+
+- Collects: Advertise IP (new) or join token + manager IP (existing)      "status": "in-progress",
+
+      "timestamp": "2025-10-23T10:32:00Z"
+
+### 3️⃣ Module 03: Traefik Setup    }
+
+- Deploys Traefik reverse proxy  }
+
+- Configures Cloudflare DNS challenge for SSL}
+
+- Collects: Email, domains, Cloudflare credentials, dashboard password```
+
+- Creates: `/mnt/hosting/infrastructure/traefik/`
+
+## Usage Scenarios
+
+### 4️⃣ Module 04: Portainer Setup (Optional)
+
+- Asks: Install Portainer? (yes/no)### Fresh Installation
+
+- If yes, asks: Public (with domain) or Local (port 9000)?
+
+- Creates: `/mnt/hosting/infrastructure/portainer/`Simply run the script and it will guide you through all modules:
+
+
+
+### 5️⃣ Module 05: Server Manager (Optional)```bash
+
+- Asks: Install Server Manager? (yes/no)sudo bash setup.sh
+
+- **Option 1**: Create new (central management server)```
+
+  - Collects: Domain, admin credentials
+
+  - Generates: SSH keys, database passwords### Resume Interrupted Installation
+
+- **Option 2**: Connect to existing (managed server)
+
+  - Collects: Manager URL, One-Time Token (OTT)If the installation is interrupted, run the script again:
+
+  - Exchanges: SSH public keys with manager
+
+- Creates: `/mnt/hosting/infrastructure/server-manager/````bash
+
+sudo bash setup.sh
+
+### 6️⃣ Module 06: Identity Provider (Optional)```
+
+- Only runs if Server Manager was installed
+
+- Asks: Install Keycloak? (yes/no)You'll be prompted with:
+
+- Deploys Keycloak with PostgreSQL- **Continue**: Resume from the last incomplete module
+
+- Collects: Domain, admin credentials- **Start Fresh**: Clear progress and restart
+
+- Creates: `/mnt/hosting/infrastructure/identity-provider/`- **Exit**: Cancel
+
+
+
+## 🔄 Installation Behavior### Redo Completed Installation
+
+
+
+### Fresh InstallationIf installation is already complete, you can:
+
+```bash
+
+sudo ./setup.sh1. **Redo Specific Sections**: Select individual modules to reinstall
+
+```2. **Redo Everything**: Complete reinstallation (with option to keep or clear data)
+
+Runs all modules in sequence, collecting configuration per module.
+
+```bash
+
+### Resume Installationsudo bash setup.sh
+
+If interrupted, run again:
+
+```bash# Example output:
+
+sudo ./setup.sh# Installation is already complete. What would you like to do?
+
+```#   1) Redo specific section(s)
+
+Offers to:#   2) Redo entire installation
+
+1. **Continue** from where it left off#   3) Exit
+
+2. **Start new** (reset progress)```
+
+3. **Exit**
+
+### Example: Redo Only Traefik Configuration
+
+### Redo Installation
+
+If already complete, run again:```bash
+
+```bashsudo bash setup.sh
+
+sudo ./setup.sh# Choose option 1
+
+```# Select "4" for Traefik & Portainer
+
+Offers to:# Confirm
+
+1. **Redo specific module** (select from list)```
+
+2. **Redo entire installation**
+
+3. **Exit**## Configuration Storage
+
+
+
+## 📂 Directory StructureModule configurations are stored in `/mnt/hosting/infrastructure/.install_config.json` for reuse across modules:
+
+
+
+``````json
+
+/mnt/hosting/infrastructure/{
+
+├── .install_progress.json          # Progress tracker  "PRIMARY_DOMAIN": "example.com",
+
+├── traefik/  "ACME_EMAIL": "admin@example.com",
+
+│   ├── .env  "TRAEFIK_HOST": "traefik.example.com",
+
+│   ├── docker-compose.yml  "PORTAINER_HOST": "portainer.example.com",
+
+│   ├── letsencrypt/acme.json  "KEYCLOAK_HOST": "login.example.com",
+
+│   └── dynamic/  "SERVER_MANAGER_DOMAIN": "manager.example.com"
+
+├── portainer/}
+
+│   ├── docker-compose.yml```
+
+│   └── data/
+
+├── server-manager/## Module Development
+
+│   ├── .env
+
+│   ├── docker-compose.ymlEach module is a standalone bash script that:
+
+│   ├── app/
+
+│   └── mysql/1. Can be executed independently
+
+└── identity-provider/2. Collects its own configuration variables
+
+    ├── .env3. Loads shared config from `.install_config.json`
+
+    ├── docker-compose.yml4. Saves new config values for other modules
+
+    ├── data/5. Exits with status 0 on success, non-zero on failure
+
+    └── postgres/
+
+```### Module Template
+
+
+
+Each service has its own:```bash
+
+- Dedicated directory#!/usr/bin/env bash
+
+- Environment file (`.env`)set -euo pipefail
+
+- Docker Compose file
+
+- Data directorieslog() { echo -e "\033[1;32m[+] $*\033[0m"; }
+
+err() { echo -e "\033[1;31m[✗] $*\033[0m"; }
+
+## 🌐 Accessing Services
+
+main() {
+
+After installation:  if [[ "${EUID}" -ne 0 ]]; then
+
+    err "Please run as root (sudo)."
+
+| Service | Access |    exit 1
+
+|---------|--------|  fi
+
+| Traefik Dashboard | `https://traefik.example.com` |  
+
+| Portainer (Public) | `https://portainer.example.com` |  # Your module logic here
+
+| Portainer (Local) | `http://<server-ip>:9000` |  log "Module completed successfully."
+
+| Server Manager | `https://manager.example.com` |}
+
+| Keycloak | `https://auth.example.com` |
+
+main "$@"
+
+## 🔐 Cloudflare API Token Setup```
+
+
+
+1. Log into [Cloudflare Dashboard](https://dash.cloudflare.com)## Environment Variables
+
+2. Go to **My Profile** → **API Tokens**
+
+3. Click **Create Token**- `INSTALLER_BASE_URL`: Base URL for downloading modules (default: GitHub raw content)
+
+4. Use **Edit zone DNS** template
+
+5. Zone Resources: Include → Specific zone → `your-domain.com````bash
+
+6. Continue to summary → Create Token# Use local modules
+
+7. Copy token for installationsudo bash setup.sh
+
+
+
+## 📖 Example Workflows# Use custom URL
+
+INSTALLER_BASE_URL="https://example.com/modules" sudo bash setup.sh
+
+### Simple Web Hosting```
+
+1. ✓ Install Docker
+
+2. ✓ Initialize new swarm## Directory Structure
+
+3. ✓ Setup Traefik
+
+4. ✓ Install Portainer (public)```
+
+5. ✗ Skip Server Manager/mnt/hosting/infrastructure/
+
+6. ✗ Skip Identity Provider├── .install_progress.json       # Installation progress
+
+├── .install_config.json         # Configuration values
+
+### Central Management Server├── docker-compose.yml           # Generated stack file
+
+1. ✓ Install Docker├── traefik/
+
+2. ✓ Initialize new swarm│   ├── letsencrypt/
+
+3. ✓ Setup Traefik│   │   └── acme.json
+
+4. ✓ Install Portainer│   └── dynamic/
+
+5. ✓ Create Server Manager│       ├── tls.yml
+
+6. ✓ Install Identity Provider│       └── certs/
+
+├── portainer/data/
+
+### Managed Worker Node├── keycloak/
+
+1. ✓ Install Docker│   ├── data/
+
+2. ✓ Join existing swarm│   └── postgres/
+
+3. ✗ Skip (manager only)├── server-manager/
+
+4. ✗ Skip (manager only)│   ├── app/
+
+5. ✓ Connect to existing Server Manager│   └── mysql/
+
+6. ✗ Skip (manager only)└── metrics/
+
+    ├── collect_usage.sh
+
+## 🛠️ Managing Services    └── YYYY-MM-DD.json
+
+```
+
+```bash
+
+# List all stacks## Services Deployed
+
+docker stack ls
+
+After successful installation:
+
+# List services
+
+docker service ls- **Traefik**: Reverse proxy with automatic SSL via Let's Encrypt
+
+- **Portainer**: Docker Swarm management UI
+
+# View service logs- **Keycloak** (optional): Identity and access management
+
+docker service logs traefik_traefik -f- **Server Manager** (optional): Custom management interface
+
+docker service logs portainer_portainer -f- **Metrics**: Daily usage collection timer
+
+
+
+# Check service details## Requirements
+
+docker service ps traefik_traefik
+
+- Ubuntu/Debian Linux
+
+# Update a service- Root access
+
+docker service update --image newimage:tag service_name- Internet connectivity
+
+- DNS records pointing to your server
+
+# Redeploy a stack
+
+cd /mnt/hosting/infrastructure/traefik## Troubleshooting
+
+docker stack deploy -c docker-compose.yml traefik
+
+### Installation Failed
+
+# Remove a stack
+
+docker stack rm portainerCheck the progress file to see which module failed:
+
+```
+
+```bash
+
+## 🔧 Troubleshootingcat /mnt/hosting/infrastructure/.install_progress.json
+
+```
+
+### Check Installation Progress
+
+```bashRun the failed module manually:
+
+cat /mnt/hosting/infrastructure/.install_progress.json | jq
+
+``````bash
+
+sudo bash ./modules/XX-modulename.sh
+
+### Reset and Start Over```
+
+```bash
+
+sudo rm /mnt/hosting/infrastructure/.install_progress.json### Reset Everything
+
+sudo ./setup.sh
+
+``````bash
+
+sudo rm -rf /mnt/hosting/infrastructure
+
+### Check Swarm Statussudo docker stack rm infrastructure
+
+```bashsudo docker system prune -af --volumes
+
+docker info | grep Swarm```
+
+docker node ls
+
+```## License
+
+
+
+### View Service LogsMIT License - See LICENSE file for details
+
+```bash
+
+docker service logs traefik_traefik --tail 100 -f# Documentation
+
+```
+
+## Installation
+
+### Verify Networks
+
+```bashTo install the Host Swarm environment, run the following command in your terminal:
+
+docker network ls | grep traefik
+
+``````curl
+
+curl -O https://raw.githubusercontent.com/afaryab/host-swarm-installer/main/setup.sh
+
+## 📚 Documentationchmod +x setup.sh
+
+sudo ./setup.sh
+
+For detailed information, see [DOCUMENTATION.md](DOCUMENTATION.md) which includes:```
+- Detailed module descriptions
+- Required variables for each module
+- Directory structure details
+- Troubleshooting guide
+- Security notes
+- Example configurations
+
+## Security Features
+
+- Auto-generated secure passwords (32-byte random)
+- Environment files created with `600` permissions
+- SSH keys use Ed25519 algorithm
+- All HTTP traffic redirected to HTTPS
+- Let's Encrypt SSL certificates
+- Traefik dashboard protected with basic auth
+- Internal services use overlay networks
+
+## Architecture
+
+```
+                                Internet
+                                   ↓
+                            [Traefik :80/:443]
+                                   ↓
+                        [traefik-net overlay]
+                                   ↓
+        ┌──────────────┬────────────────┬──────────────────┐
+        ↓              ↓                ↓                  ↓
+   [Portainer]  [Server Manager]  [Keycloak]         [Your Apps]
+        ↓              ↓                ↓
+    [Agent]        [MySQL]         [PostgreSQL]
+```
+
+## Contributing
+
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+MIT
+
+## Support
+
+- **Issues**: Open a GitHub issue
+- **Logs**: Check service logs with `docker service logs <service>`
+- **Progress**: View `.install_progress.json` for current state
+- **Docs**: See [DOCUMENTATION.md](DOCUMENTATION.md) for details
