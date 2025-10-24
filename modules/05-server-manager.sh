@@ -289,7 +289,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - APP_URL=https://${DOMAIN}
     volumes:
-      - ${PWD}/app:/app/storage
+      - ./app:/app/storage
       - ${SSH_PRIVATE_KEY_PATH}:/app/ssh/id_ed25519:ro
     networks:
       - traefik-net
@@ -346,7 +346,7 @@ services:
     deploy:
       restart_policy:
         condition: any
-        
+
 networks:
   traefik-net:
     external: true

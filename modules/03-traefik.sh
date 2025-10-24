@@ -126,9 +126,9 @@ services:
     
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ${PWD}/letsencrypt:/letsencrypt
-      - ${PWD}/dynamic:/etc/traefik/dynamic
-      - ${PWD}/logs:/var/log/traefik
+      - ./letsencrypt:/letsencrypt
+      - ./dynamic:/etc/traefik/dynamic
+      - ./logs:/var/log/traefik
     
     networks:
       - traefik-net

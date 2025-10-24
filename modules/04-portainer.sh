@@ -68,7 +68,7 @@ services:
     image: portainer/portainer-ce:latest
     command: -H tcp://tasks.agent:9001 --tlsskipverify
     volumes:
-      - ${PWD}/data:/data
+      - ./data:/data
     ports:
       - "9000:9000"
     networks:
