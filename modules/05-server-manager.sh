@@ -305,11 +305,11 @@ services:
         - "traefik.http.middlewares.server-manager-redirect.redirectscheme.scheme=https"
         - "traefik.http.middlewares.server-manager-redirect.redirectscheme.permanent=true"
 
-        - "traefik.http.routers.server-manager.rule=Host(\\\`${domain}\\\`)"
+        - "traefik.http.routers.server-manager.rule=Host(\`${domain}\`)"
         - "traefik.http.routers.server-manager.entrypoints=websecure"
         - "traefik.http.routers.server-manager.tls=true"
         - "traefik.http.routers.server-manager.service=server-manager"
-        - "traefik.http.routers.server-manager-http.rule=Host(\\\`${domain}\\\`)"
+        - "traefik.http.routers.server-manager-http.rule=Host(\`${domain}\`)"
         - "traefik.http.routers.server-manager-http.entrypoints=web"
         - "traefik.http.routers.server-manager-http.service=server-manager-redirect"
         
@@ -324,11 +324,11 @@ services:
       - MYSQL_DATABASE=\${DB_DATABASE}
       - MYSQL_USER=\${DB_USERNAME}
       - MYSQL_PASSWORD=\${DB_PASSWORD}
-      - BACKUP_CRON="0 * * * *"          # Every hour at minute 0
-      - USAGE_CRON="*/30 * * * *"          # Every half hour
-      - PRUNE_CRON="0 4 * * 0"           # Weekly cleanup on Sunday at 4 AM
-      - RETAIN_DAYS=1                    # Keep 1 day of backups
-      - RETAIN_COUNT=6                   # Keep max 6 backups
+      - BACKUP_CRON=0 * * * *
+      - USAGE_CRON=*/30 * * * *
+      - PRUNE_CRON=0 4 * * 0
+      - RETAIN_DAYS=1
+      - RETAIN_COUNT=6
     volumes:
       - ./mysql:/var/lib/mysql
     networks:

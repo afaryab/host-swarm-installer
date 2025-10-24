@@ -169,12 +169,12 @@ services:
       - KC_DB_URL_DATABASE=\${KC_DB}
       - KC_DB_USERNAME=\${KC_DB_USERNAME}
       - KC_DB_PASSWORD=\${KC_DB_PASSWORD}
-      - KC_HOSTNAME_STRICT: "false"
-      - KC_HOSTNAME_STRICT_HTTPS: "true"
-      - KC_HTTP_ENABLED: "true"
-      - KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
-      - KC_METRICS_ENABLED: "true"
-      - KC_PROXY_HEADERS: xforwarded
+      - KC_HOSTNAME_STRICT=false
+      - KC_HOSTNAME_STRICT_HTTPS=true
+      - KC_HTTP_ENABLED=true
+      - KC_HOSTNAME_STRICT_BACKCHANNEL=false
+      - KC_METRICS_ENABLED=true
+      - KC_PROXY_HEADERS=xforwarded
       - KC_PROXY=edge
       - KC_HOSTNAME=\${KC_HOSTNAME}
       - KC_HEALTH_ENABLED=true
@@ -197,13 +197,13 @@ services:
         - "traefik.http.middlewares.kc-redirect.redirectscheme.scheme=https"
         - "traefik.http.middlewares.kc-redirect.redirectscheme.permanent=true"
 
-        - "traefik.http.routers.kc.rule=Host(\\\`${KEYCLOAK_DOMAIN}\\\`)"
+        - "traefik.http.routers.kc.rule=Host(\`${KEYCLOAK_DOMAIN}\`)"
         - "traefik.http.routers.kc.entrypoints=websecure"
         - "traefik.http.routers.kc.tls=true"
         - "traefik.http.routers.kc.service=kc"
         #- "traefik.http.routers.kc.tls.certresolver=le"
         #- "traefik.http.services.kc.loadbalancer.server.port=80"
-        - "traefik.http.routers.kc-http.rule=Host(\\\`${KEYCLOAK_DOMAIN}\\\`)"
+        - "traefik.http.routers.kc-http.rule=Host(\`${KEYCLOAK_DOMAIN}\`)"
         - "traefik.http.routers.kc-http.entrypoints=web"
         - "traefik.http.routers.kc-http.middlewares=kc-redirect"
 
